@@ -1,0 +1,11 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+COPY pyproject.toml .
+RUN pip install --no-cache-dir -e ".[dev]"
+
+COPY . .
+RUN sed -i 's/\r$//' /app/entrypoint.sh && chmod +x /app/entrypoint.sh
+
+EXPOSE 8000
+ENTRYPOINT ["/app/entrypoint.sh"]

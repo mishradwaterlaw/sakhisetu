@@ -1,0 +1,9 @@
+{
+  "name": "SakhiSetu Leader & Café",
+  "short_name": "SakhiSetu",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fafaf9",
+  "theme_color": "#0f3d3e",
+  "icons": []
+}

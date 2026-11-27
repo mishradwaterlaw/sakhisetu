@@ -1,0 +1,29 @@
+name: Docker Compose CI
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  docker-smoke-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bootstrap .env from .env.example
+        run: cp .env.example .env
+
+      - name: Build and start full stack
+        run: docker compose up --build -d
+
+      - name: Wait for backend /health
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8000/health; then
+              echo "Backend is healthy!"
+              exit 0
+            fi
+            sleep 3
+          done
+          docker compose logs
+          exit 1

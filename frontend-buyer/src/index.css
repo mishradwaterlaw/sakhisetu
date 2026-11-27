@@ -1,0 +1,23 @@
+@import "tailwindcss";
+
+:root {
+  --bg-base: #F4F5F7;
+  --bg-surface: #FFFFFF;
+  --text-primary: #0F172A;
+  --text-secondary: #475569;
+  --border-neutral: #CBD5E1;
+  --status-warning: #B45309;
+  --status-warning-bg: #FEF3C7;
+  --status-success: #047857;
+  --status-success-bg: #D1FAE5;
+}
+
+@layer base {
+  body {
+    font-family: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+    background-color: var(--bg-base);
+    color: var(--text-primary);
+    font-size: 14px;
+    line-height: 20px;
+  }
+}

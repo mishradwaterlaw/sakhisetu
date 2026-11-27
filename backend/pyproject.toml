@@ -1,0 +1,41 @@
+[project]
+name = "sakhisetu-backend"
+version = "0.1.0"
+description = "SakhiSetu production backend for SHG order intake, CP-SAT allocation, QC, and group-governed payouts"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "pydantic>=2.9.0",
+    "pydantic-settings>=2.6.0",
+    "sqlalchemy>=2.0.36",
+    "alembic>=1.14.0",
+    "psycopg[binary]>=3.2.3",
+    "ortools>=9.11.4210",
+    "cryptography>=43.0.3",
+    "pyjwt>=2.9.0",
+    "passlib[bcrypt]>=1.7.4",
+    "httpx>=0.27.2",
+    "arq>=0.26.1",
+    "redis>=5.2.0",
+    "python-multipart>=0.0.17",
+    "structlog>=24.4.0",
+]
+
+[project.optional-dependencies]
+lyzr = [
+    "lyzr-adk>=0.1.0",
+]
+dev = [
+    "pytest>=8.3.3",
+    "pytest-asyncio>=0.24.0",
+    "httpx>=0.27.2",
+]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"

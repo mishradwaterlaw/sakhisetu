@@ -1,0 +1,57 @@
+@import "tailwindcss";
+
+:root {
+  --bg-base: #F4F5F7;
+  --bg-surface: #FFFFFF;
+  --bg-surface-muted: #E8ECEF;
+  --text-primary: #0F172A;
+  --text-secondary: #475569;
+  --border-neutral: #CBD5E1;
+  --accent-gate: #D97706;
+  --accent-gate-text: #0F172A;
+  --status-warning: #B45309;
+  --status-warning-bg: #FEF3C7;
+  --status-success: #047857;
+  --status-success-bg: #D1FAE5;
+  --status-danger: #B91C1C;
+  --status-danger-bg: #FEE2E2;
+}
+
+.dark {
+  --bg-base: #0F172A;
+  --bg-surface: #1E293B;
+  --bg-surface-muted: #162032;
+  --text-primary: #F8FAFC;
+  --text-secondary: #94A3B8;
+  --border-neutral: #334155;
+  --accent-gate: #F59E0B;
+  --accent-gate-text: #0F172A;
+  --status-warning: #FBBF24;
+  --status-warning-bg: #451A03;
+  --status-success: #34D399;
+  --status-success-bg: #064E3B;
+  --status-danger: #F87171;
+  --status-danger-bg: #450A0A;
+}
+
+@layer base {
+  body {
+    font-family: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+    background-color: var(--bg-base);
+    color: var(--text-primary);
+    font-size: 14px;
+    line-height: 20px;
+  }
+
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Strict 6-step type scale from DESIGN.md */
+.text-scale-xs { font-size: 12px; line-height: 16px; font-weight: 600; }
+.text-scale-sm { font-size: 13px; line-height: 18px; font-weight: 500; }
+.text-scale-base { font-size: 14px; line-height: 20px; font-weight: 500; }
+.text-scale-md { font-size: 16px; line-height: 22px; font-weight: 700; }
+.text-scale-lg { font-size: 20px; line-height: 26px; font-weight: 700; }
+.text-scale-xl { font-size: 24px; line-height: 30px; font-weight: 800; }
