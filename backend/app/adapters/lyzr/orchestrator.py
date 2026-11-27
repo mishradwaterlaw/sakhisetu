@@ -26,6 +26,7 @@ from app.models.people import Member, Party, SHG
 from app.models.planning import Task, TaskDependency
 from app.models.quality import QualityRubric
 from app.security import blind_index
+from app.services.conversations import project_inbound, project_outbound
 from app.services.usage import record_usage
 from app.services.validation import validate_order_deterministic
 
@@ -157,6 +158,19 @@ def run_intake_pipeline(
     inbound: NormalizedInbound,
     buyer_party_id_hint: str | None = None,
 ) -> IntakeOutcome:
+    outgoing: list[CommsLog] = []
+    outcome = _run_intake(db, shg_id=shg_id, inbound=inbound, buyer_party_id_hint=buyer_party_id_hint, outgoing=outgoing)
+    db.flush()
+    message = db.get(InboundMessage, outcome.inbound_message_id)
+    project_inbound(db, message)
+    for log in outgoing:
+        project_outbound(db, log)
+    return outcome
+
+
+def _run_intake(
+    db: Session, *, shg_id: str, inbound: NormalizedInbound, buyer_party_id_hint: str | None, outgoing: list[CommsLog],
+) -> IntakeOutcome:
     """Execute the traced multi-step intake SuperFlow (§4, §8)."""
     trace_id = f"tr_{uuid.uuid4().hex[:16]}"
 
@@ -196,7 +210,7 @@ def run_intake_pipeline(
 
     # Step 2: IDENTIFY — match sender or quarantine (§4.2)
     t1 = time.perf_counter()
-    member = db.scalar(select(Member).where(Member.phone_hash == phone_hash)) if phone_hash else None
+    member = db.scalar(select(Member).where(Member.phone_hash == phone_hash, Member.shg_id == shg_id)) if phone_hash else None
     party = (
         db.scalar(select(Party).where(Party.phone_hash == phone_hash))
         if (phone_hash and not member)
@@ -230,19 +244,19 @@ def run_intake_pipeline(
     if member and not member.has_completed_onboarding:
         member.has_completed_onboarding = True
         onboarding_played = True
-        db.add(
-            CommsLog(
-                shg_id=shg_id,
-                recipient_member_id=member.id,
-                channel=inbound.channel,
-                language=lang,
-                message_category="ONBOARDING",
-                fact_text="Welcome to SakhiSetu. Your work and pay records are yours to verify anytime.",
-                action_text="No payout happens without group review.",
-                request_text="You can now continue with your message.",
-                is_replayable=True,
-            )
+        welcome = CommsLog(
+            shg_id=shg_id,
+            recipient_member_id=member.id,
+            channel=inbound.channel,
+            language=lang,
+            message_category="ONBOARDING",
+            fact_text="Welcome to SakhiSetu. Your work and pay records are yours to verify anytime.",
+            action_text="No payout happens without group review.",
+            request_text="You can now continue with your message.",
+            is_replayable=True,
         )
+        db.add(welcome)
+        outgoing.append(welcome)
 
     _log_step(
         db,

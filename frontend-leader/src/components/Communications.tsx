@@ -1,301 +1,277 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState } from "react";
 import {
-  ArrowRight,
-  CalendarDays,
-  Check,
-  Headphones,
-  Inbox,
+  Inbox as InboxIcon,
+  Megaphone,
   MessageCircle,
-  MessagesSquare,
   Phone,
   Search,
-  Store,
-  UserPlus,
+  SlidersHorizontal,
 } from "lucide-react";
-import { apiFetch } from "../api";
-import { dateLabel, humanize, initials } from "../workspace";
+import { type Order } from "../workspace";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "./ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs-toast";
+import { channels, day, time, useInbox, type Notice, type Inbox } from "./conversation-data";
+import { Avatar, ConversationWorkspace, Draft, NoThread } from "./ConversationWorkspace";
+import "./communications.css";
 
-type Message = {
-  id: string;
-  channel: string;
-  sender: string | null;
-  text: string | null;
-  intent: string;
-  quarantined: boolean;
-  created_at: string;
-  order_id: string | null;
-  order_code: string | null;
-};
-const channels: Record<string, string> = {
-  whatsapp_smartphone: "WhatsApp",
-  basic_phone_voice: "Voice",
-  janai_cafe: "JanAI Café",
-  leader_manual: "Manual entry",
-};
-function needsReview(msg: Message) {
-  return msg.quarantined || msg.intent === "UNROUTED";
+const whatsapp = "whatsapp_smartphone";
+const filters = ["All", "Orders", "Tasks", "General"];
+function useSmallScreen() {
+  const [small, setSmall] = useState(() => window.matchMedia("(max-width: 700px)").matches);
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 700px)");
+    const change = () => setSmall(media.matches);
+    media.addEventListener("change", change);
+    return () => media.removeEventListener("change", change);
+  }, []);
+  return small;
 }
-
-function OnboardBuyer({
-  message,
-  leaderId,
-  onComplete,
-}: {
-  message: Message;
-  leaderId: string;
-  onComplete: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    setBusy(true);
-    setError("");
-    try {
-      await apiFetch(`/api/leader/quarantine/${message.id}/onboard-buyer`, {
-        method: "POST",
-        body: JSON.stringify({ leader_id: leaderId, name: name.trim(), phone: phone.trim() }),
+function Notices({ inbox }: { inbox: Inbox }) {
+  const [records, setRecords] = useState<Notice[]>([]);
+  const [state, setState] = useState("Loading notices…");
+  useEffect(() => {
+    const controller = new AbortController();
+    inbox
+      .request<{ announcements: Notice[] }>("/announcements", { signal: controller.signal })
+      .then((data) => {
+        if (!controller.signal.aborted) {
+          setRecords(data.announcements);
+          setState("");
+        }
+      })
+      .catch((err) => {
+        if (!controller.signal.aborted) setState(err.message);
       });
-      setOpen(false);
-      onComplete();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not onboard buyer.");
-    } finally {
-      setBusy(false);
-    }
-  }
+    return () => controller.abort();
+  }, [inbox.request, inbox.revision]);
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="primary">
-          <UserPlus size={16} />
-          Onboard buyer
-        </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogTitle>Onboard buyer</DialogTitle>
-        <DialogDescription>
-          Confirm the sender’s details to release this message from quarantine.
-        </DialogDescription>
-        <form className="form-stack" onSubmit={submit}>
-          <label className="field">
-            Buyer name
-            <input required value={name} onChange={(e) => setName(e.target.value)} />
-          </label>
-          <label className="field">
-            Phone number
-            <input type="tel" required value={phone} onChange={(e) => setPhone(e.target.value)} />
-          </label>
-          {error && (
-            <p className="error-box" role="alert">
-              {error}
-            </p>
-          )}
-          <Button variant="primary" type="submit" disabled={busy || !name.trim() || !phone.trim()}>
-            Confirm buyer
-          </Button>
-        </form>
-      </DialogContent>
-    </Dialog>
+    <Card className="comm-notices">
+      <h2>
+        <Megaphone size={20} />
+        Group announcements
+      </h2>
+      {state ? (
+        <p role="status">
+          {state} {state !== "Loading notices…" && <Button onClick={inbox.refresh}>Retry</Button>}
+        </p>
+      ) : records.length ? (
+        records.map((n) => (
+          <article key={n.id}>
+            <small>
+              {day(n.created_at)} · {time(n.created_at)} · {channels[n.channel] || n.channel}
+            </small>
+            <h3>{n.title}</h3>
+            <p>{n.text}</p>
+          </article>
+        ))
+      ) : (
+        <div className="comm-empty">
+          <Megaphone />
+          <h3>No group notices yet</h3>
+          <p>Your group’s payout review and approval notices will appear here.</p>
+        </div>
+      )}
+    </Card>
   );
 }
 
 export function Communications({
   shgId,
   leaderId,
+  orders,
   openOrder,
   onChange,
 }: {
   shgId: string;
   leaderId: string;
+  orders: Order[];
   openOrder: (id: string) => void;
   onChange: (message: string) => void;
 }) {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [selected, setSelected] = useState("");
-  const [channel, setChannel] = useState("all");
+  const [channel, setChannel] = useState(whatsapp);
+  const [other, setOther] = useState("all");
+  const [filter, setFilter] = useState("All");
   const [query, setQuery] = useState("");
-  const [reviewOnly, setReviewOnly] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [revision, setRevision] = useState(0);
-  useEffect(() => {
-    let active = true;
-    setLoading(true);
-    setError("");
-    apiFetch<{ messages: Message[] }>(`/api/leader/shgs/${shgId}/communications`, {
-      headers: { "X-Leader-Id": leaderId },
-    })
-      .then((res) => {
-        if (active) setMessages(res.messages);
-      })
-      .catch((err) => {
-        if (active) setError(err.message);
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [shgId, leaderId, revision]);
-  const filtered = messages.filter(
-    (msg) =>
-      (channel === "all" || msg.channel === channel) &&
-      (!reviewOnly || needsReview(msg)) &&
-      [msg.sender || "Unknown sender", msg.text, msg.order_code].some((value) =>
-        value?.toLowerCase().includes(query.trim().toLowerCase()),
-      ),
+  const [selected, setSelected] = useState("");
+  const small = useSmallScreen();
+  const inbox = useInbox(shgId, leaderId, query);
+  const source = channel === "other" ? other : channel;
+  const visible = inbox.threads.filter(
+    (t) =>
+      (source === "all" || (source === "review" ? t.needs_review : t.channel === source)) &&
+      (filter === "All" || t.topics.includes(filter.toLowerCase())),
   );
-  const current = filtered.find((msg) => msg.id === selected) || filtered[0];
+  const current = visible.find((t) => t.id === selected) || (!small ? visible[0] : undefined);
+  const currentId = current?.id;
+  useEffect(() => {
+    if (!small && currentId) setSelected(currentId);
+  }, [small, currentId]);
+  const threadOpen = Boolean(small && current);
+  function switchChannel(value: string) {
+    setChannel(value);
+    setFilter("All");
+    setQuery("");
+    setSelected("");
+  }
+  function back() {
+    const id = selected;
+    setSelected("");
+    requestAnimationFrame(() => document.getElementById(`thread-${id}`)?.focus());
+  }
   return (
-    <div className="page-stack">
+    <div className="comm-page">
       <div className="page-heading">
         <div>
           <h1>Communications</h1>
-          <p>Review incoming messages and the orders they belong to.</p>
+          <p>Coordinate with your members across WhatsApp and voice calls.</p>
         </div>
       </div>
-      <Tabs value={channel} onValueChange={setChannel}>
-        <TabsList aria-label="Message channel" className="channel-tabs">
-          {(
-            [
-              ["all", "All channels", Inbox],
-              ["whatsapp_smartphone", "WhatsApp", MessageCircle],
-              ["basic_phone_voice", "Voice", Phone],
-              ["janai_cafe", "JanAI Café", Store],
-            ] as const
-          ).map(([value, label, Icon]) => (
-            <TabsTrigger key={value} value={value}>
-              <Icon size={16} />
-              {label}
+      <Tabs value={channel} onValueChange={switchChannel}>
+        <div className="comm-toolbar">
+          <TabsList className="comm-tabs" aria-label="Communication channel">
+            <TabsTrigger value={whatsapp}>
+              <MessageCircle />
+              WhatsApp
             </TabsTrigger>
-          ))}
-        </TabsList>
-        <TabsContent value={channel} className="mt-4">
-          {error ? (
-            <div className="error-box" role="alert">
-              {error}
-              <Button onClick={() => setRevision((v) => v + 1)}>Retry</Button>
-            </div>
+            <TabsTrigger value="basic_phone_voice">
+              <Phone />
+              Voice calls
+            </TabsTrigger>
+            <TabsTrigger value="announcements">
+              <Megaphone />
+              Announcements
+            </TabsTrigger>
+            <TabsTrigger value="other">
+              <SlidersHorizontal />
+              More
+            </TabsTrigger>
+          </TabsList>
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button variant="primary" className="comm-announcement">
+                <Megaphone size={18} />
+                <span>Draft announcement</span>
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogTitle>Draft announcement</DialogTitle>
+              <DialogDescription>
+                Prepare a group update and copy it when you’re ready to share.
+              </DialogDescription>
+              <Draft storageKey={`sakhi.announcement.${shgId}.${leaderId}`} announcement />
+            </DialogContent>
+          </Dialog>
+        </div>
+        <TabsContent value={channel}>
+          {channel === "announcements" ? (
+            <Notices inbox={inbox} />
           ) : (
-            <div className="inbox-layout">
-              <Card className="inbox-list">
-                <div className="panel-heading">
-                  <h2>
-                    <MessagesSquare />
-                    Inbox
-                  </h2>
-                  <span className="number-count">{filtered.length}</span>
-                </div>
-                <div className="inbox-tools">
-                  <div className="search-field">
-                    <Search />
+            <div className={`comm-grid ${threadOpen ? "show-thread" : ""}`}>
+              <Card className="comm-list">
+                <div className="comm-list-tools">
+                  {channel === "other" && (
+                    <label className="field">
+                      Inbox
+                      <select
+                        value={other}
+                        onChange={(e) => {
+                          setOther(e.target.value);
+                          setSelected("");
+                        }}
+                      >
+                        <option value="all">All channels</option>
+                        <option value="janai_cafe">JanAI Café</option>
+                        <option value="leader_manual">Manual entries</option>
+                        <option value="review">Needs review</option>
+                      </select>
+                    </label>
+                  )}
+                  <label className="comm-search">
+                    <Search size={17} />
                     <input
-                      aria-label="Search messages"
-                      placeholder="Search messages…"
+                      type="search"
+                      aria-label="Search conversations"
+                      maxLength={500}
+                      placeholder="Search conversations…"
                       value={query}
                       onChange={(e) => setQuery(e.target.value)}
                     />
-                  </div>
-                  <div className="filter-row">
-                    <button aria-pressed={!reviewOnly} onClick={() => setReviewOnly(false)}>
-                      All messages
-                    </button>
-                    <button aria-pressed={reviewOnly} onClick={() => setReviewOnly(true)}>
-                      Needs review
-                    </button>
+                  </label>
+                  <div className="comm-filters" aria-label="Conversation topics">
+                    {filters.map((f) => (
+                      <button key={f} aria-pressed={filter === f} onClick={() => setFilter(f)}>
+                        {f}
+                      </button>
+                    ))}
                   </div>
                 </div>
-                {loading ? (
-                  <p className="quiet inside" aria-busy="true">
-                    Loading messages…
-                  </p>
-                ) : filtered.length === 0 ? (
-                  <div className="empty">
-                    <Inbox />
-                    <h3>No messages here</h3>
-                    <p>Incoming messages matching this view will appear here.</p>
-                  </div>
-                ) : (
-                  filtered.map((msg) => (
-                    <button
-                      className="message-row"
-                      key={msg.id}
-                      aria-pressed={msg.id === current?.id}
-                      onClick={() => setSelected(msg.id)}
-                    >
-                      <span className="avatar">{initials(msg.sender || "Unknown")}</span>
-                      <span className="message-preview">
-                        <strong>{msg.sender || "Unknown sender"}</strong>
-                        <small>{msg.text || "Voice or media message"}</small>
-                      </span>
-                      <time>{dateLabel(msg.created_at)}</time>
-                    </button>
-                  ))
-                )}
-              </Card>
-              <Card className="message-detail">
-                {current && !loading ? (
-                  <>
-                    <div className="review-heading">
-                      <span className="avatar large">{initials(current.sender || "Unknown")}</span>
-                      <div>
-                        <h2>{current.sender || "Unknown sender"}</h2>
-                        <p>{channels[current.channel] || humanize(current.channel)}</p>
-                      </div>
+                <div className="comm-rows">
+                  {inbox.error && (
+                    <div className="error-box" role="alert">
+                      {inbox.error} <button onClick={inbox.refresh}>Retry</button>
                     </div>
-                    <div className="message-body">
-                      <div className="message-date">
-                        <CalendarDays size={14} />
-                        {new Date(current.created_at).toLocaleString("en-IN", {
-                          dateStyle: "medium",
-                          timeStyle: "short",
-                        })}
+                  )}
+                  {inbox.loading ? (
+                    <p className="comm-muted" role="status">
+                      Loading conversations…
+                    </p>
+                  ) : visible.length ? (
+                    visible.map((t, i) => (
+                      <button
+                        id={`thread-${t.id}`}
+                        className="comm-row"
+                        aria-pressed={current?.id === t.id}
+                        key={t.id}
+                        onClick={() => setSelected(t.id)}
+                      >
+                        <Avatar title={t.title} tone={i} />
+                        <span className="comm-row-content">
+                          <strong>{t.title}</strong>
+                          <small>{t.preview}</small>
+                        </span>
+                        <span className="comm-row-meta">
+                          <time>
+                            {day(t.updated_at) === "Today" ? time(t.updated_at) : day(t.updated_at)}
+                          </time>
+                          {t.unread > 0 && (
+                            <span className="comm-unread" aria-label={`${t.unread} unread`}>
+                              {t.unread}
+                            </span>
+                          )}
+                        </span>
+                      </button>
+                    ))
+                  ) : (
+                    !inbox.error && (
+                      <div className="comm-empty">
+                        <InboxIcon />
+                        <h3>No conversations</h3>
+                        <p>
+                          {query || filter !== "All"
+                            ? "Try another search or topic."
+                            : "Incoming messages for this channel will appear here."}
+                        </p>
                       </div>
-                      <blockquote>{current.text || "Voice or media message"}</blockquote>
-                      <span className={`status-pill ${needsReview(current) ? "amber" : "sage"}`}>
-                        {needsReview(current) ? <Headphones size={13} /> : <Check size={13} />}{" "}
-                        {current.quarantined ? "Quarantined" : humanize(current.intent)}
-                      </span>
-                    </div>
-                    {current.order_id && (
-                      <div className="detail-action">
-                        <span>Related order</span>
-                        <button className="text-button" onClick={() => openOrder(current.order_id!)}>
-                          {current.order_code} <ArrowRight />
-                        </button>
-                      </div>
-                    )}
-                    {current.quarantined && (
-                      <div className="detail-action">
-                        <OnboardBuyer
-                          key={current.id}
-                          message={current}
-                          leaderId={leaderId}
-                          onComplete={() => {
-                            setRevision((v) => v + 1);
-                            onChange("Buyer onboarded.");
-                          }}
-                        />
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <div className="empty">
-                    <MessageCircle />
-                    <h3>Message details</h3>
-                    <p>Select an incoming message to read it here.</p>
-                  </div>
-                )}
+                    )
+                  )}
+                </div>
               </Card>
+              {current ? (
+                <ConversationWorkspace
+                  key={current.id}
+                  thread={current}
+                  inbox={inbox}
+                  leaderId={leaderId}
+                  openOrder={openOrder}
+                  orders={orders}
+                  onChange={onChange}
+                  back={back}
+                />
+              ) : (
+                <NoThread />
+              )}
             </div>
           )}
         </TabsContent>

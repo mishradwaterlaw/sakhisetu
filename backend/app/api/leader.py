@@ -6,7 +6,8 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import ActorContext, get_optional_actor
+from app.api.deps import ActorContext, get_optional_actor, require_group_leader
+from app.services.conversations import project_inbound
 from app.database import get_db
 from app.models.governance import AgentEvent, Approval
 from app.models.intake import ExtractedField, InboundMessage, Order
@@ -272,19 +273,9 @@ def get_leader_dashboard(shg_id: str, db: Session = Depends(get_db)):
 @router.get("/shgs/{shg_id}/communications")
 def get_communications(
     shg_id: str,
-    actor: ActorContext | None = Depends(get_optional_actor),
-    x_leader_id: str | None = Header(default=None),
+    leader: Member = Depends(require_group_leader),
     db: Session = Depends(get_db),
 ):
-    if actor and (actor.role != "LEADER" or actor.shg_id != shg_id):
-        raise HTTPException(status_code=403, detail="Group leader access required")
-    leader_id = actor.actor_id if actor else x_leader_id
-    if not leader_id:
-        raise HTTPException(status_code=401, detail="Leader identity required")
-    leader = db.get(Member, leader_id)
-    if not leader or leader.role != "leader" or not leader.is_active or leader.shg_id != shg_id:
-        raise HTTPException(status_code=403, detail="Group leader access required")
-
     rows = db.execute(
         select(InboundMessage, Member.name, Party.name, Order.id, Order.order_code)
         .outerjoin(Member, (Member.id == InboundMessage.sender_member_id) & (Member.shg_id == shg_id))
@@ -313,11 +304,13 @@ def get_communications(
 
 @router.post("/quarantine/{message_id}/onboard-member")
 def onboard_member_from_quarantine(
-    message_id: str, body: OnboardMemberFromQuarantineIn, db: Session = Depends(get_db)
+    message_id: str, body: OnboardMemberFromQuarantineIn, db: Session = Depends(get_db),
+    actor: ActorContext | None = Depends(get_optional_actor), x_leader_id: str | None = Header(default=None),
 ):
-    msg = db.get(InboundMessage, message_id)
+    msg = db.scalar(select(InboundMessage).where(InboundMessage.id == message_id).with_for_update())
     if not msg or not msg.is_quarantined:
         raise HTTPException(status_code=404, detail="Quarantined message not found")
+    require_group_leader(msg.shg_id, actor, x_leader_id or body.leader_id, db)
 
     member = Member(
         shg_id=msg.shg_id,
@@ -337,17 +330,20 @@ def onboard_member_from_quarantine(
     msg.sender_member_id = member.id
     msg.is_quarantined = False
     msg.intent = "PENDING"
+    project_inbound(db, msg)
     db.commit()
     return {"member_id": member.id, "message_id": msg.id, "status": "ONBOARDED_AND_UNQUARANTINED"}
 
 
 @router.post("/quarantine/{message_id}/onboard-buyer")
 def onboard_buyer_from_quarantine(
-    message_id: str, body: OnboardBuyerFromQuarantineIn, db: Session = Depends(get_db)
+    message_id: str, body: OnboardBuyerFromQuarantineIn, db: Session = Depends(get_db),
+    actor: ActorContext | None = Depends(get_optional_actor), x_leader_id: str | None = Header(default=None),
 ):
-    msg = db.get(InboundMessage, message_id)
+    msg = db.scalar(select(InboundMessage).where(InboundMessage.id == message_id).with_for_update())
     if not msg or not msg.is_quarantined:
         raise HTTPException(status_code=404, detail="Quarantined message not found")
+    require_group_leader(msg.shg_id, actor, x_leader_id or body.leader_id, db)
 
     buyer = Party(
         party_type="buyer",
@@ -362,6 +358,7 @@ def onboard_buyer_from_quarantine(
     msg.sender_party_id = buyer.id
     msg.is_quarantined = False
     msg.intent = "PENDING"
+    project_inbound(db, msg)
     db.commit()
     return {"buyer_party_id": buyer.id, "message_id": msg.id, "status": "ONBOARDED_AND_UNQUARANTINED"}
 

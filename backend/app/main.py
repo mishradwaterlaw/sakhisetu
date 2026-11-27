@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.api import buyer, leader, member, webhooks
+from app.api import buyer, conversations, leader, member, webhooks
 from app.database import Base, SessionLocal, engine, get_db
 from app.seed import seed_demo_data
 
@@ -63,6 +63,7 @@ app.add_middleware(
 
 app.include_router(webhooks.router)
 app.include_router(leader.router)
+app.include_router(conversations.router)
 app.include_router(member.router)
 app.include_router(buyer.router)
 

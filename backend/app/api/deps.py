@@ -1,7 +1,10 @@
 """FastAPI authentication & RBAC dependencies."""
 
 from dataclasses import dataclass
-from fastapi import Header, HTTPException, status
+from sqlalchemy.orm import Session
+from app.database import get_db
+from app.models.people import Member
+from fastapi import Depends, Header, HTTPException, status
 
 from app.security import decode_access_token
 
@@ -59,3 +62,18 @@ def require_member_self(
             detail="Privacy boundary (§18): members cannot access another member's individual record",
         )
     return caller_id
+
+
+def require_group_leader(
+    shg_id: str, actor: ActorContext | None = Depends(get_optional_actor),
+    x_leader_id: str | None = Header(default=None), db: Session = Depends(get_db),
+) -> Member:
+    if actor and (actor.role != "LEADER" or actor.shg_id != shg_id):
+        raise HTTPException(status_code=403, detail="Group leader access required")
+    leader_id = actor.actor_id if actor else x_leader_id
+    if not leader_id:
+        raise HTTPException(status_code=401, detail="Leader identity required")
+    leader = db.get(Member, leader_id)
+    if not leader or leader.role != "leader" or not leader.is_active or leader.shg_id != shg_id:
+        raise HTTPException(status_code=403, detail="Group leader access required")
+    return leader

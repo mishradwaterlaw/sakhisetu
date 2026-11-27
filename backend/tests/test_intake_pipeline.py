@@ -43,13 +43,13 @@ def test_exotel_unrouted_returns_dtmf_exoml_and_whatsapp_draft_traces_steps(clie
     assert "<Gather" in ex_resp.text
     assert "Press 1 for New Order" in ex_resp.text
 
-    # Valid WhatsApp order -> traced AgentEvents + UsageMeter recorded
+    # A distinct quantity avoids duplicating the seeded 30-piece order.
     wa_resp = client.post(
         "/api/webhooks/whatsapp",
         json={
             "shg_id": shg.id,
             "sender_phone": "+919900000099",
-            "text": "Order 30 Cotton Tote Bag pieces at Rs 190 in 10 days",
+            "text": "Order 31 Cotton Tote Bag pieces at Rs 190 in 10 days",
         },
     )
     assert wa_resp.status_code == 200

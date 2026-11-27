@@ -7,11 +7,14 @@ from app.models.catalogue import Material, PriceModel, Product, TaskTemplate, Te
 from app.models.people import Federation, Member, Party, SHG
 from app.models.planning import Inventory
 from app.security import blind_index
+from app.services.demo_conversations import seed_demo_conversations
 
 
 def seed_demo_data(db: Session) -> dict:
     existing = db.scalar(select(SHG).where(SHG.name == "Kaveri Mahila Sangha"))
     if existing:
+        seed_demo_conversations(db, existing)
+        db.commit()
         buyer = db.scalar(select(Party).where(Party.party_type == "buyer"))
         leader = db.scalar(select(Member).where(Member.shg_id == existing.id, Member.role == "leader"))
         return {
@@ -135,5 +138,6 @@ def seed_demo_data(db: Session) -> dict:
     )
     run_intake_pipeline(db, shg_id=shg.id, inbound=sample_inbound, buyer_party_id_hint=buyer.id)
 
+    seed_demo_conversations(db, shg)
     db.commit()
     return {"shg_id": shg.id, "leader_id": leader_id, "buyer_party_id": buyer.id}

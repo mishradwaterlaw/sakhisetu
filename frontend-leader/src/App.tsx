@@ -323,6 +323,7 @@ export default function App() {
                 )}
                 {page === "communications" && (
                   <Communications
+                    orders={dash.orders}
                     shgId={dash.shg.id}
                     leaderId={leaderId}
                     openOrder={(id) => navigate("orders", id)}
