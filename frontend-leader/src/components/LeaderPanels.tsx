@@ -20,7 +20,7 @@ export function ImpactMetricWidget({
   if (loading) {
     return (
       <Card aria-busy="true">
-        <div className="text-scale-sm text-[var(--text-secondary)]">Loading impact metrics...</div>
+        <div className="type-scale-sm text-[var(--text-secondary)]">Loading impact metrics...</div>
       </Card>
     );
   }
@@ -33,11 +33,11 @@ export function ImpactMetricWidget({
   return (
     <Card className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
       <div className="md:col-span-7 space-y-1">
-        <div className="flex items-center gap-1.5 text-scale-xs uppercase text-[var(--text-secondary)]">
+        <div className="flex items-center gap-1.5 type-scale-xs uppercase text-[var(--text-secondary)]">
           <TrendingUp className="w-4 h-4 text-[var(--status-success)]" strokeWidth={1.75} />
           <span>Measured Group Protection (QuoteCheck &amp; Recovery Audit)</span>
         </div>
-        <div className="text-scale-lg text-[var(--text-primary)] tabular-nums">
+        <div className="type-scale-lg text-[var(--text-primary)] tabular-nums">
           ₹{underpricingCaughtInr.toFixed(2)} caught in underpricing • {recoveryActionsResolved} recovery actions resolved
         </div>
       </div>
@@ -113,18 +113,18 @@ export function ManualOrderForm({
         </CardTitle>
       </CardHeader>
       {err && (
-        <div className="mb-2 rounded border border-[var(--status-danger)] bg-[var(--status-danger-bg)] px-3 py-2 text-scale-xs text-[var(--status-danger)]">
+        <div className="mb-2 rounded border border-[var(--status-danger)] bg-[var(--status-danger-bg)] px-3 py-2 type-scale-xs text-[var(--status-danger)]">
           {err}
         </div>
       )}
       {buyers.length === 0 ? (
-        <div className="text-scale-sm text-[var(--text-secondary)]">No buyers onboarded yet.</div>
+        <div className="type-scale-sm text-[var(--text-secondary)]">No buyers onboarded yet.</div>
       ) : (
         <form onSubmit={submit} className="grid grid-cols-1 sm:grid-cols-5 gap-2">
           <select
             value={buyerId || buyers[0]?.id || ""}
             onChange={(e) => setBuyerId(e.target.value)}
-            className="rounded border border-[var(--border-neutral)] bg-[var(--bg-surface)] px-2.5 py-2 text-scale-sm"
+            className="rounded border border-[var(--border-neutral)] bg-[var(--bg-surface)] px-2.5 py-2 type-scale-sm"
           >
             {buyers.map((b) => (
               <option key={b.id} value={b.id}>
@@ -176,11 +176,11 @@ export function LiveMemberTrackingTable({
       </CardHeader>
 
       {loading ? (
-        <div className="text-scale-sm text-[var(--text-secondary)] py-4" aria-busy="true">
+        <div className="type-scale-sm text-[var(--text-secondary)] py-4" aria-busy="true">
           Loading member statuses...
         </div>
       ) : rows.length === 0 ? (
-        <div className="text-scale-sm text-[var(--text-secondary)] py-4">No active SHG members found.</div>
+        <div className="type-scale-sm text-[var(--text-secondary)] py-4">No active SHG members found.</div>
       ) : (
         <div className="space-y-3">
           <div className="h-36 w-full">
@@ -211,11 +211,11 @@ export function LiveMemberTrackingTable({
                   <TableCell>
                     <div className="font-bold">{r.name}</div>
                     {r.unhonored_preference_reason && (
-                      <div className="text-scale-xs text-[var(--status-warning)] mt-0.5">{r.unhonored_preference_reason}</div>
+                      <div className="type-scale-xs text-[var(--status-warning)] mt-0.5">{r.unhonored_preference_reason}</div>
                     )}
                   </TableCell>
                   <TableCell>
-                    <span className={`inline-block px-2 py-0.5 rounded border text-scale-xs ${statusStyle[r.live_status] || statusStyle.NOT_STARTED}`}>
+                    <span className={`inline-block px-2 py-0.5 rounded border type-scale-xs ${statusStyle[r.live_status] || statusStyle.NOT_STARTED}`}>
                       {r.live_status.replace("_", " ")}
                     </span>
                   </TableCell>
@@ -276,21 +276,21 @@ export function SideBySideQCQueue({
           <Camera className="w-4 h-4" strokeWidth={1.75} />
           <span>Side-by-Side Human QC Queue</span>
         </CardTitle>
-        <span className="text-scale-xs text-[var(--text-secondary)]">Rubric: {rubric?.status || "STUB"}</span>
+        <span className="type-scale-xs text-[var(--text-secondary)]">Rubric: {rubric?.status || "STUB"}</span>
       </CardHeader>
 
       {err && (
-        <div className="mb-2 rounded border border-[var(--status-danger)] bg-[var(--status-danger-bg)] px-3 py-2 text-scale-xs text-[var(--status-danger)]">
+        <div className="mb-2 rounded border border-[var(--status-danger)] bg-[var(--status-danger-bg)] px-3 py-2 type-scale-xs text-[var(--status-danger)]">
           {err}
         </div>
       )}
 
       {eligible.length === 0 ? (
-        <div className="text-scale-sm text-[var(--text-secondary)]">No active assignments to inspect yet.</div>
+        <div className="type-scale-sm text-[var(--text-secondary)]">No active assignments to inspect yet.</div>
       ) : (
         <div className="space-y-2.5">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <div className="rounded border border-[var(--border-neutral)] bg-[var(--bg-surface)] p-2.5 text-scale-xs">
+            <div className="rounded border border-[var(--border-neutral)] bg-[var(--bg-surface)] p-2.5 type-scale-xs">
               <div className="font-bold mb-1">Agreed Reference Rubric</div>
               {(rubric?.criteria || []).map((c, idx) => (
                 <div key={idx} className="text-[var(--text-secondary)]">
@@ -299,7 +299,7 @@ export function SideBySideQCQueue({
               ))}
             </div>
             <div className="rounded border border-[var(--border-neutral)] bg-[var(--bg-surface)] p-2.5">
-              <div className="text-scale-xs mb-1">Flag / Escalate Note</div>
+              <div className="type-scale-xs mb-1">Flag / Escalate Note</div>
               <Input value={flagReason} onChange={(e) => setFlagReason(e.target.value)} />
             </div>
           </div>
@@ -307,7 +307,7 @@ export function SideBySideQCQueue({
           {eligible.map((a) => (
             <div
               key={a.id}
-              className="flex flex-wrap items-center justify-between gap-2 rounded border border-[var(--border-neutral)] bg-[var(--bg-surface)] p-2.5 text-scale-sm"
+              className="flex flex-wrap items-center justify-between gap-2 rounded border border-[var(--border-neutral)] bg-[var(--bg-surface)] p-2.5 type-scale-sm"
             >
               <div>
                 <strong>{a.member_name}</strong> — {a.passed_units}/{a.assigned_units} passed
@@ -388,17 +388,17 @@ export function SupplierAndCounterOfferPanel({
       </CardHeader>
 
       {err && (
-        <div className="rounded border border-[var(--status-danger)] bg-[var(--status-danger-bg)] px-3 py-2 text-scale-xs text-[var(--status-danger)]">
+        <div className="rounded border border-[var(--status-danger)] bg-[var(--status-danger-bg)] px-3 py-2 type-scale-xs text-[var(--status-danger)]">
           {err}
         </div>
       )}
 
       {loadingQuotes ? (
-        <div className="text-scale-xs text-[var(--text-secondary)]" aria-busy="true">
+        <div className="type-scale-xs text-[var(--text-secondary)]" aria-busy="true">
           Comparing supplier quotes...
         </div>
       ) : quotes.length === 0 ? (
-        <div className="text-scale-xs text-[var(--text-secondary)]">Click "Compare Suppliers" to view material quotes side-by-side.</div>
+        <div className="type-scale-xs text-[var(--text-secondary)]">Click "Compare Suppliers" to view material quotes side-by-side.</div>
       ) : (
         <Table>
           <TableHeader>
@@ -424,14 +424,14 @@ export function SupplierAndCounterOfferPanel({
 
       {draftMsg && (
         <div className="space-y-2 rounded border-2 border-[#0F172A] bg-[var(--bg-surface)] p-3">
-          <div className="text-scale-xs text-[var(--status-warning)]">
+          <div className="type-scale-xs text-[var(--status-warning)]">
             Review and edit before sending — never auto-sent to external buyer.
           </div>
           <textarea
             rows={3}
             value={draftMsg}
             onChange={(e) => setDraftMsg(e.target.value)}
-            className="w-full rounded border border-[var(--border-neutral)] p-2 text-scale-sm"
+            className="w-full rounded border border-[var(--border-neutral)] p-2 type-scale-sm"
           />
           <Dialog>
             <DialogTrigger asChild>
@@ -444,7 +444,7 @@ export function SupplierAndCounterOfferPanel({
               <DialogDescription>
                 This sends your reviewed counter-offer to the buyer channel. Verify the exact message below:
               </DialogDescription>
-              <p className="mt-3 rounded border border-[var(--border-neutral)] bg-[var(--bg-surface-muted)] p-2.5 text-scale-sm">
+              <p className="mt-3 rounded border border-[var(--border-neutral)] bg-[var(--bg-surface-muted)] p-2.5 type-scale-sm">
                 {draftMsg}
               </p>
               <div className="mt-4 flex justify-end gap-2">
@@ -462,7 +462,7 @@ export function SupplierAndCounterOfferPanel({
               </div>
             </DialogContent>
           </Dialog>
-          {sentNotice && <div className="text-scale-xs text-[var(--status-success)]">{sentNotice}</div>}
+          {sentNotice && <div className="type-scale-xs text-[var(--status-success)]">{sentNotice}</div>}
         </div>
       )}
     </Card>

@@ -111,7 +111,7 @@ export function CafeView({ shgId, onSubmitted }: { shgId: string; onSubmitted: (
       <button
         type="button"
         onClick={submit}
-        className="w-full py-3.5 bg-[#0F172A] hover:bg-[#1E293B] text-[#F8FAFC] text-scale-md rounded"
+        className="w-full py-3.5 bg-[#0F172A] hover:bg-[#1E293B] text-[#F8FAFC] type-scale-md rounded"
       >
         Submit Consented Entry
       </button>

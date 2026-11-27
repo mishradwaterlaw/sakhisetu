@@ -48,10 +48,10 @@
   }
 }
 
-/* Strict 6-step type scale from DESIGN.md */
-.text-scale-xs { font-size: 12px; line-height: 16px; font-weight: 600; }
-.text-scale-sm { font-size: 13px; line-height: 18px; font-weight: 500; }
-.text-scale-base { font-size: 14px; line-height: 20px; font-weight: 500; }
-.text-scale-md { font-size: 16px; line-height: 22px; font-weight: 700; }
-.text-scale-lg { font-size: 20px; line-height: 26px; font-weight: 700; }
-.text-scale-xl { font-size: 24px; line-height: 30px; font-weight: 800; }
+/* Strict 6-step type scale from DESIGN.md (named type-scale-* so tailwind-merge never confuses with text-<color>) */
+.type-scale-xs { font-size: 12px; line-height: 16px; font-weight: 600; }
+.type-scale-sm { font-size: 13px; line-height: 18px; font-weight: 500; }
+.type-scale-base { font-size: 14px; line-height: 20px; font-weight: 500; }
+.type-scale-md { font-size: 16px; line-height: 22px; font-weight: 700; }
+.type-scale-lg { font-size: 20px; line-height: 26px; font-weight: 700; }
+.type-scale-xl { font-size: 24px; line-height: 30px; font-weight: 800; }

@@ -55,7 +55,7 @@ export function StatusBadge({ status }: { status: string }) {
     label: status,
   };
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-scale-xs tracking-wide ${cfg.cls}`}>
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border type-scale-xs tracking-wide ${cfg.cls}`}>
       {cfg.icon}
       <span>{cfg.label}</span>
     </span>

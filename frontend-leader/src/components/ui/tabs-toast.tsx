@@ -18,7 +18,7 @@ export function TabsTrigger({ className, ...props }: React.ComponentPropsWithout
   return (
     <TabsPrimitive.Trigger
       className={cn(
-        "rounded px-3 py-1.5 text-scale-xs text-[#94A3B8] transition-colors data-[state=active]:bg-[#FFFFFF] data-[state=active]:text-[#0F172A]",
+        "rounded px-3 py-1.5 type-scale-xs text-[#94A3B8] transition-colors data-[state=active]:bg-[#FFFFFF] data-[state=active]:text-[#0F172A]",
         className
       )}
       {...props}
@@ -48,7 +48,7 @@ export const Toast = React.forwardRef<
   <ToastPrimitive.Root
     ref={ref}
     className={cn(
-      "rounded border-2 border-[#0F172A] bg-[var(--bg-surface)] px-4 py-3 text-scale-sm text-[var(--text-primary)]",
+      "rounded border-2 border-[#0F172A] bg-[var(--bg-surface)] px-4 py-3 type-scale-sm text-[var(--text-primary)]",
       className
     )}
     {...props}
@@ -60,7 +60,7 @@ export function Input({ className, ...props }: React.InputHTMLAttributes<HTMLInp
   return (
     <input
       className={cn(
-        "w-full rounded border border-[var(--border-neutral)] bg-[var(--bg-surface)] px-2.5 py-2 text-scale-sm text-[var(--text-primary)] focus:border-[#0F172A] focus:outline-none",
+        "w-full rounded border border-[var(--border-neutral)] bg-[var(--bg-surface)] px-2.5 py-2 type-scale-sm text-[var(--text-primary)] focus:border-[#0F172A] focus:outline-none",
         className
       )}
       {...props}

@@ -23,5 +23,5 @@ export function CardHeader({ className, ...props }: React.HTMLAttributes<HTMLDiv
 }
 
 export function CardTitle({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) {
-  return <h3 className={cn("text-scale-md text-[var(--text-primary)]", className)} {...props} />;
+  return <h3 className={cn("type-scale-md text-[var(--text-primary)]", className)} {...props} />;
 }

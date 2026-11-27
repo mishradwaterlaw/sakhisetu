@@ -39,12 +39,12 @@ No component in the Leader app may use a font size outside these 6 steps:
 
 | Token | Size | Weight | Line Height | Usage |
 |---|---|---|---|---|
-| `text-scale-xs` | `12px` (`0.75rem`) | `600` | `16px` | Table column headers, status badges, timestamps |
-| `text-scale-sm` | `13px` (`0.8125rem`) | `500` | `18px` | Dense table cells, solver explanations, form labels |
-| `text-scale-base` | `14px` (`0.875rem`) | `500` | `20px` | Standard body text, input controls |
-| `text-scale-md` | `16px` (`1rem`) | `700` | `22px` | Panel headers, order codes, approval-gate CTA text |
-| `text-scale-lg` | `20px` (`1.25rem`) | `700` | `26px` | Section titles, KPI card numbers |
-| `text-scale-xl` | `24px` (`1.5rem`) | `800` | `30px` | Ledger totals, primary money figures |
+| `type-scale-xs` | `12px` (`0.75rem`) | `600` | `16px` | Table column headers, status badges, timestamps |
+| `type-scale-sm` | `13px` (`0.8125rem`) | `500` | `18px` | Dense table cells, solver explanations, form labels |
+| `type-scale-base` | `14px` (`0.875rem`) | `500` | `20px` | Standard body text, input controls |
+| `type-scale-md` | `16px` (`1rem`) | `700` | `22px` | Panel headers, order codes, approval-gate CTA text |
+| `type-scale-lg` | `20px` (`1.25rem`) | `700` | `26px` | Section titles, KPI card numbers |
+| `type-scale-xl` | `24px` (`1.5rem`) | `800` | `30px` | Ledger totals, primary money figures |
 
 ---
 

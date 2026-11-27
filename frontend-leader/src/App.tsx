@@ -158,8 +158,8 @@ export default function App() {
         <header className="bg-[#0F172A] text-[#F8FAFC] border-b-2 border-[#334155]">
           <div className="max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h1 className="text-scale-lg">SakhiSetu Ledger &amp; Operations</h1>
-              <p className="text-scale-xs text-[#94A3B8]">
+              <h1 className="type-scale-lg">SakhiSetu Ledger &amp; Operations</h1>
+              <p className="type-scale-xs text-[#94A3B8]">
                 {dash ? `${dash.shg.name} • ${dash.shg.village}` : "Connecting to SHG ledger..."}
               </p>
             </div>
@@ -173,7 +173,7 @@ export default function App() {
 
         <main className="max-w-6xl mx-auto p-4 space-y-3">
           {error && (
-            <div className="rounded border-2 border-[var(--status-danger)] bg-[var(--status-danger-bg)] p-3 text-scale-sm text-[var(--status-danger)] flex items-center justify-between gap-2">
+            <div className="rounded border-2 border-[var(--status-danger)] bg-[var(--status-danger-bg)] p-3 type-scale-sm text-[var(--status-danger)] flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 font-bold">
                 <AlertCircle className="w-4 h-4 shrink-0" strokeWidth={1.75} />
                 <span>{error}</span>
@@ -191,7 +191,7 @@ export default function App() {
           <TabsContent value="leader" className="space-y-3">
             {loadingDash && !dash ? (
               <Card aria-busy="true">
-                <div className="text-scale-sm text-[var(--text-secondary)] py-6">Loading SHG operations dashboard...</div>
+                <div className="type-scale-sm text-[var(--text-secondary)] py-6">Loading SHG operations dashboard...</div>
               </Card>
             ) : (
               dash && (
@@ -199,20 +199,20 @@ export default function App() {
                   {/* Dense Operational KPI Bar */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 tabular-nums">
                     <Card>
-                      <div className="text-scale-xs uppercase text-[var(--text-secondary)]">Active Orders</div>
-                      <div className="text-scale-xl mt-1">{dash.orders.length}</div>
+                      <div className="type-scale-xs uppercase text-[var(--text-secondary)]">Active Orders</div>
+                      <div className="type-scale-xl mt-1">{dash.orders.length}</div>
                     </Card>
                     <Card>
-                      <div className="text-scale-xs uppercase text-[var(--status-warning)]">Quarantined / Unrouted</div>
-                      <div className="text-scale-xl mt-1">{dash.quarantined_messages.length + dash.unrouted_messages.length}</div>
+                      <div className="type-scale-xs uppercase text-[var(--status-warning)]">Quarantined / Unrouted</div>
+                      <div className="type-scale-xl mt-1">{dash.quarantined_messages.length + dash.unrouted_messages.length}</div>
                     </Card>
                     <Card>
-                      <div className="text-scale-xs uppercase text-[var(--text-secondary)]">Pending Payouts</div>
-                      <div className="text-scale-xl mt-1">{dash.payout_batches.filter((p) => p.status !== "DISBURSED").length}</div>
+                      <div className="type-scale-xs uppercase text-[var(--text-secondary)]">Pending Payouts</div>
+                      <div className="type-scale-xl mt-1">{dash.payout_batches.filter((p) => p.status !== "DISBURSED").length}</div>
                     </Card>
                     <Card>
-                      <div className="text-scale-xs uppercase text-[var(--status-success)]">Infra Cost ({dash.usage_summary.period_ym})</div>
-                      <div className="text-scale-xl mt-1">₹{dash.usage_summary.total_cost_inr.toFixed(2)}</div>
+                      <div className="type-scale-xs uppercase text-[var(--status-success)]">Infra Cost ({dash.usage_summary.period_ym})</div>
+                      <div className="type-scale-xl mt-1">₹{dash.usage_summary.total_cost_inr.toFixed(2)}</div>
                     </Card>
                   </div>
 
@@ -238,15 +238,15 @@ export default function App() {
                   {/* Quarantine Inbox (§4.2) */}
                   {dash.quarantined_messages.length > 0 && (
                     <Card className="border-2 border-[var(--status-warning)] bg-[var(--status-warning-bg)] space-y-2">
-                      <div className="flex items-center gap-2 text-scale-md text-[var(--status-warning)]">
+                      <div className="flex items-center gap-2 type-scale-md text-[var(--status-warning)]">
                         <ShieldAlert className="w-4 h-4" strokeWidth={1.75} />
                         <span>Quarantined Unknown Senders</span>
                       </div>
                       {dash.quarantined_messages.map((qm) => (
                         <div key={qm.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-[var(--border-neutral)] bg-[var(--bg-surface)] p-2.5">
                           <div>
-                            <div className="text-scale-xs uppercase text-[var(--text-secondary)]">{qm.channel}</div>
-                            <div className="text-scale-sm">{qm.raw_text || "(Voice/Media)"}</div>
+                            <div className="type-scale-xs uppercase text-[var(--text-secondary)]">{qm.channel}</div>
+                            <div className="type-scale-sm">{qm.raw_text || "(Voice/Media)"}</div>
                           </div>
                           <Button
                             variant="primary"
@@ -298,7 +298,7 @@ export default function App() {
                       </CardHeader>
 
                       {dash.orders.length === 0 ? (
-                        <div className="text-scale-sm text-[var(--text-secondary)] py-6">
+                        <div className="type-scale-sm text-[var(--text-secondary)] py-6">
                           No orders yet. Create a manual draft above or simulate an inbound buyer order.
                         </div>
                       ) : (
@@ -314,10 +314,10 @@ export default function App() {
                               }`}
                             >
                               <div className="flex items-center justify-between gap-2">
-                                <span className="text-scale-sm font-bold">{o.order_code}</span>
+                                <span className="type-scale-sm font-bold">{o.order_code}</span>
                                 <StatusBadge status={o.status} />
                               </div>
-                              <div className="text-scale-xs text-[var(--text-secondary)] mt-1 flex gap-3 tabular-nums">
+                              <div className="type-scale-xs text-[var(--text-secondary)] mt-1 flex gap-3 tabular-nums">
                                 <span>Qty: {o.quantity}</span>
                                 <span>Offer: ₹{o.offered_price_per_unit_inr ?? "—"}</span>
                               </div>
@@ -329,11 +329,11 @@ export default function App() {
 
                     <Card className="lg:col-span-7 space-y-3">
                       {loadingOrder ? (
-                        <div className="text-scale-sm text-[var(--text-secondary)] py-8" aria-busy="true">
+                        <div className="type-scale-sm text-[var(--text-secondary)] py-8" aria-busy="true">
                           Loading order details...
                         </div>
                       ) : !orderDetail ? (
-                        <div className="text-scale-sm text-[var(--text-secondary)] py-8">
+                        <div className="type-scale-sm text-[var(--text-secondary)] py-8">
                           Select an order to review extracted fields, pricing, CP-SAT plan, and approval gates.
                         </div>
                       ) : (
@@ -341,7 +341,7 @@ export default function App() {
                           <CardHeader>
                             <div>
                               <CardTitle>{orderDetail.order.order_code}</CardTitle>
-                              <p className="text-scale-xs text-[var(--text-secondary)]">Raw input: "{orderDetail.raw_input || "N/A"}"</p>
+                              <p className="type-scale-xs text-[var(--text-secondary)]">Raw input: "{orderDetail.raw_input || "N/A"}"</p>
                             </div>
                             <StatusBadge status={orderDetail.order.status} />
                           </CardHeader>
@@ -354,8 +354,8 @@ export default function App() {
                             className="rounded border-2 border-[#0F172A] bg-[#0F172A] text-[#F8FAFC] p-3 flex flex-wrap items-center justify-between gap-3"
                           >
                             <div>
-                              <div className="text-scale-xs uppercase text-[#94A3B8]">Required Leader Decision</div>
-                              <div className="text-scale-sm mt-0.5">
+                              <div className="type-scale-xs uppercase text-[#94A3B8]">Required Leader Decision</div>
+                              <div className="type-scale-sm mt-0.5">
                                 {orderDetail.order.status === "DRAFT" && "Confirm extracted order details to proceed."}
                                 {orderDetail.order.status === "CONFIRMED" && "Review MVP cost breakdown & approve price."}
                                 {orderDetail.order.status === "PRICING_APPROVED" && "Run OR-Tools CP-SAT fair allocation solver."}
@@ -453,18 +453,18 @@ export default function App() {
                                     : "border-[var(--border-neutral)] bg-[var(--bg-surface-muted)]"
                                 }`}
                               >
-                                <div className="flex justify-between text-scale-xs">
+                                <div className="flex justify-between type-scale-xs">
                                   <span className="uppercase">{f.field_name}</span>
                                   <span>{Math.round(f.confidence * 100)}% conf</span>
                                 </div>
-                                <div className="text-scale-sm font-bold mt-0.5">{f.extracted_value || "MISSING"}</div>
-                                <div className="text-scale-xs text-[var(--text-secondary)]">Span: "{f.source_span || "none"}"</div>
+                                <div className="type-scale-sm font-bold mt-0.5">{f.extracted_value || "MISSING"}</div>
+                                <div className="type-scale-xs text-[var(--text-secondary)]">Span: "{f.source_span || "none"}"</div>
                               </div>
                             ))}
                           </div>
 
                           {pricingInfo && (
-                            <div className="rounded border border-[var(--border-neutral)] bg-[var(--bg-surface-muted)] p-2.5 text-scale-xs space-y-1">
+                            <div className="rounded border border-[var(--border-neutral)] bg-[var(--bg-surface-muted)] p-2.5 type-scale-xs space-y-1">
                               <div className="font-bold flex items-center gap-1">
                                 <IndianRupee className="w-3.5 h-3.5" strokeWidth={1.75} />
                                 <span>MVP: ₹{String(pricingInfo.minimum_viable_price_per_unit_inr)}/unit ({String(pricingInfo.recommendation)})</span>
@@ -478,9 +478,9 @@ export default function App() {
 
                           {orderDetail.assignments.length > 0 && (
                             <div className="space-y-1.5">
-                              <div className="text-scale-xs uppercase text-[var(--text-secondary)]">CP-SAT Solver Explanations</div>
+                              <div className="type-scale-xs uppercase text-[var(--text-secondary)]">CP-SAT Solver Explanations</div>
                               {orderDetail.assignments.map((a) => (
-                                <div key={a.id} className="rounded border border-[var(--border-neutral)] bg-[var(--bg-surface-muted)] p-2.5 text-scale-xs">
+                                <div key={a.id} className="rounded border border-[var(--border-neutral)] bg-[var(--bg-surface-muted)] p-2.5 type-scale-xs">
                                   <div className="font-bold">
                                     {a.member_name} — {a.assigned_units}u ({a.estimated_minutes}m)
                                   </div>
@@ -526,10 +526,10 @@ export default function App() {
                         <div key={b.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-[var(--border-neutral)] p-2.5">
                           <div>
                             <div className="flex items-center gap-2">
-                              <span className="text-scale-md tabular-nums">₹{b.total_amount_inr.toFixed(2)}</span>
+                              <span className="type-scale-md tabular-nums">₹{b.total_amount_inr.toFixed(2)}</span>
                               <StatusBadge status={b.status} />
                             </div>
-                            <div className="text-scale-xs text-[var(--text-secondary)] mt-1 flex items-center gap-1">
+                            <div className="type-scale-xs text-[var(--text-secondary)] mt-1 flex items-center gap-1">
                               <Users className="w-3.5 h-3.5" strokeWidth={1.75} />
                               <span>{b.breakdown_snapshot.map((x) => `${x.member_name}: ₹${x.amount_inr}`).join(" • ")}</span>
                             </div>
@@ -547,7 +547,7 @@ export default function App() {
                             </Button>
                           )}
                           {b.status === "DISBURSED" && (
-                            <span className="inline-flex items-center gap-1 text-scale-xs text-[var(--status-success)]">
+                            <span className="inline-flex items-center gap-1 type-scale-xs text-[var(--status-success)]">
                               <CheckCircle2 className="w-4 h-4" strokeWidth={1.75} /> Disbursed
                             </span>
                           )}

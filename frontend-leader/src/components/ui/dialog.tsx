@@ -35,7 +35,7 @@ export function DialogContent({
 }
 
 export function DialogTitle({ className, ...props }: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Title>) {
-  return <DialogPrimitive.Title className={cn("text-scale-lg text-[var(--text-primary)]", className)} {...props} />;
+  return <DialogPrimitive.Title className={cn("type-scale-lg text-[var(--text-primary)]", className)} {...props} />;
 }
 
 export function DialogDescription({
@@ -44,7 +44,7 @@ export function DialogDescription({
 }: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Description>) {
   return (
     <DialogPrimitive.Description
-      className={cn("text-scale-sm text-[var(--text-secondary)] mt-1", className)}
+      className={cn("type-scale-sm text-[var(--text-secondary)] mt-1", className)}
       {...props}
     />
   );
