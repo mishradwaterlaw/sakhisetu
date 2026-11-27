@@ -76,5 +76,21 @@ services:
       timeout: 3s
       retries: 6
 
+  tunnel-leader:
+    image: cloudflare/cloudflared:latest
+    profiles: ["tunnel"]
+    command: tunnel --no-autoupdate --url http://frontend-leader:80
+    depends_on:
+      frontend-leader:
+        condition: service_healthy
+
+  tunnel-buyer:
+    image: cloudflare/cloudflared:latest
+    profiles: ["tunnel"]
+    command: tunnel --no-autoupdate --url http://frontend-buyer:80
+    depends_on:
+      frontend-buyer:
+        condition: service_healthy
+
 volumes:
   pgdata:
