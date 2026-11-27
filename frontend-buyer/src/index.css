@@ -1,23 +1,307 @@
+@import "@fontsource-variable/ibm-plex-sans/index.css";
 @import "tailwindcss";
-
 :root {
-  --bg-base: #F4F5F7;
-  --bg-surface: #FFFFFF;
-  --text-primary: #0F172A;
-  --text-secondary: #475569;
-  --border-neutral: #CBD5E1;
-  --status-warning: #B45309;
-  --status-warning-bg: #FEF3C7;
-  --status-success: #047857;
-  --status-success-bg: #D1FAE5;
+  color: #352731;
+  background: #faf8f7;
+  font-family: "IBM Plex Sans Variable", system-ui, sans-serif;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
 }
-
-@layer base {
-  body {
-    font-family: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
-    background-color: var(--bg-base);
-    color: var(--text-primary);
-    font-size: 14px;
-    line-height: 20px;
+body {
+  margin: 0;
+}
+svg {
+  stroke-width: 1.75;
+  flex-shrink: 0;
+}
+button {
+  cursor: pointer;
+}
+:focus-visible {
+  outline: 2px solid #922e52;
+  outline-offset: 3px;
+}
+.buyer-frame {
+  width: min(1040px, 100%);
+  margin: auto;
+  padding: 0 24px;
+}
+.buyer-header {
+  background: white;
+  border-bottom: 1px solid #e7dfe0;
+}
+.buyer-header .buyer-frame {
+  height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.brand {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  text-decoration: none;
+  color: #68203b;
+}
+.brand img {
+  width: 43px;
+  height: 39px;
+}
+.brand strong,
+.brand small {
+  display: block;
+}
+.brand strong {
+  font-size: 27px;
+  letter-spacing: -1.4px;
+  line-height: 1;
+  font-weight: 700;
+}
+.brand small {
+  font-size: 10px;
+  margin-top: 4px;
+  font-weight: 600;
+}
+.portal-label,
+.buyer-crumb,
+.buyer-search,
+.list-title,
+.quality-row,
+.quality-row span,
+.progress-header,
+.order-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.portal-label {
+  font-size: 13px;
+  font-weight: 550;
+  color: #72354c;
+}
+.buyer-crumb {
+  margin: 25px 0;
+  color: #766a70;
+  font-size: 12px;
+}
+.buyer-crumb b {
+  color: #45343e;
+}
+.buyer-title,
+.summary-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.buyer-title {
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+h1 {
+  font-size: 34px;
+  letter-spacing: -1.5px;
+  line-height: 1.1;
+  color: #61233c;
+  font-weight: 650;
+}
+.buyer-title p,
+.order-heading p,
+.buyer-state p {
+  font-size: 14px;
+  color: #776870;
+  margin-top: 5px;
+}
+.buyer-search {
+  border: 1px solid #e5dbdf;
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: white;
+  color: #776970;
+}
+.buyer-search input {
+  outline: none;
+  min-width: 0;
+}
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin: 23px 0;
+}
+.summary-card,
+.buyer-order,
+.buyer-state {
+  background: white;
+  border: 1px solid #e7dfe0;
+  border-radius: 13px;
+  padding: 19px;
+}
+.tile {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+}
+.rose {
+  color: #913650;
+  background: #f7e5e9;
+}
+.amber {
+  color: #87531c;
+  background: #fbefdc;
+}
+.sage {
+  color: #387155;
+  background: #e7f1e9;
+}
+.summary-card small,
+.facts dt {
+  font-size: 12px;
+  color: #786b73;
+}
+.summary-card strong {
+  display: block;
+  font-size: 26px;
+  line-height: 1.2;
+  font-weight: 650;
+  letter-spacing: -1px;
+}
+.list-title {
+  font-size: 19px;
+  font-weight: 650;
+  letter-spacing: -0.4px;
+  margin: 25px 0 12px;
+}
+.list-title svg,
+.order-heading h3 {
+  color: #8d3150;
+}
+.list-title span,
+.buyer-status {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 15px;
+  background: #f5e8ec;
+  color: #7c2948;
+  font-weight: 600;
+}
+.buyer-order {
+  margin-bottom: 14px;
+}
+.order-heading {
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.order-heading h3 {
+  font-size: 18px;
+  font-weight: 650;
+}
+.order-heading p {
+  font-size: 12px;
+  margin: 0;
+}
+.buyer-status {
+  margin-left: auto;
+  background: #f5eee5;
+  color: #805a28;
+}
+.facts {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  border-block: 1px solid #eee5e7;
+  padding: 14px 0;
+  margin: 15px 0;
+}
+.facts dd {
+  font-weight: 600;
+}
+.progress-header {
+  justify-content: space-between;
+  font-size: 12px;
+}
+.progress-header strong {
+  font-weight: 600;
+}
+progress {
+  width: 100%;
+  height: 6px;
+  display: block;
+  border: 0;
+  border-radius: 5px;
+  overflow: hidden;
+  background: #f2ecee;
+  margin-top: 7px;
+  accent-color: #993754;
+}
+progress::-webkit-progress-bar {
+  background: #f2ecee;
+}
+progress::-webkit-progress-value {
+  background: #993754;
+}
+progress::-moz-progress-bar {
+  background: #993754;
+}
+.quality-row {
+  flex-wrap: wrap;
+  gap: 20px;
+  font-size: 12px;
+  color: #675961;
+  margin-top: 14px;
+}
+.quality-row svg {
+  width: 14px;
+  height: 14px;
+}
+.buyer-state {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 8px;
+  color: #76656d;
+  margin: 16px 0;
+}
+.buyer-state button {
+  padding: 5px 12px;
+  border-radius: 6px;
+  background: #922e52;
+  color: white;
+}
+@media (max-width: 600px) {
+  .buyer-frame {
+    padding: 0 14px;
+  }
+  .buyer-header .buyer-frame {
+    height: 60px;
+  }
+  .buyer-crumb {
+    margin: 18px 0;
+  }
+  .buyer-title h1 {
+    font-size: 28px;
+  }
+  .summary-grid {
+    gap: 7px;
+  }
+  .summary-card {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 10px;
+    gap: 5px;
+  }
+  .summary-card small {
+    font-size: 11px;
+  }
+  .tile {
+    width: 30px;
+    height: 30px;
+  }
+  .facts {
+    font-size: 12px;
+  }
+  .buyer-order {
+    padding: 14px;
   }
 }

@@ -18,8 +18,10 @@ interface MemberRecord {
 }
 
 /** Member Self-Service & Replayable Read-Back (§1, §7, §12). */
-export function MemberView({ members }: { members: MemberSummary[] }) {
-  const [selectedId, setSelectedId] = useState(members[0]?.id || "");
+export function MemberView({ members, initialId }: { members: MemberSummary[]; initialId?: string | null }) {
+  const [selectedId, setSelectedId] = useState(members.find(m => m.id === initialId)?.id || members[0]?.id || "");
+  const [error, setError] = useState("");
+  const [revision, setRevision] = useState(0);
   const [record, setRecord] = useState<MemberRecord | null>(null);
 
   useEffect(() => {
@@ -28,12 +30,15 @@ export function MemberView({ members }: { members: MemberSummary[] }) {
 
   useEffect(() => {
     if (!selectedId) return;
+    let active = true;
+    setRecord(null); setError("");
     apiFetch<MemberRecord>(`/api/member/${selectedId}/record`, {
       headers: { "X-Member-Id": selectedId },
     })
-      .then(setRecord)
-      .catch(() => {});
-  }, [selectedId]);
+      .then(result => { if (active) setRecord(result); })
+      .catch(err => { if (active) setError(err.message); });
+    return () => { active = false; };
+  }, [selectedId, revision]);
 
   function speakReadback(text: string, lang: string) {
     if (!("speechSynthesis" in window)) return;
@@ -44,16 +49,17 @@ export function MemberView({ members }: { members: MemberSummary[] }) {
   }
 
   return (
-    <section className="max-w-2xl mx-auto space-y-4">
-      <div className="bg-white border-2 border-slate-300 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+    <section className="member-panel space-y-4">
+      <div className="bg-white border border-[var(--border-neutral)] rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-bold text-slate-900">Member Self-Verification Record</h2>
+          <h2 className="text-lg font-bold text-slate-900">Member record</h2>
           <p className="text-xs text-slate-600">Every member can view or hear her own work &amp; pay record anytime.</p>
         </div>
         <select
+          aria-label="Select member"
           value={selectedId}
           onChange={(e) => setSelectedId(e.target.value)}
-          className="px-3 py-2 border-2 border-slate-300 rounded-lg font-semibold text-sm bg-white"
+          className="px-3 py-2 border border-[var(--border-neutral)] rounded-lg font-semibold text-sm bg-white"
         >
           {members.map((m) => (
             <option key={m.id} value={m.id}>
@@ -63,11 +69,14 @@ export function MemberView({ members }: { members: MemberSummary[] }) {
         </select>
       </div>
 
+      {error && <div role="alert" className="error-box">{error}<button onClick={() => setRevision(v => v + 1)}>Retry</button></div>}
+      {!selectedId && <p className="quiet">No active members in this group.</p>}
+      {selectedId && !record && !error && <p aria-busy="true" className="quiet">Loading member record…</p>}
       {record && (
         <>
-          <div className="bg-teal-950 text-white rounded-xl p-5 flex items-center justify-between">
+          <div className="bg-[var(--brand-dark)] text-white rounded-xl p-5 flex items-center justify-between">
             <div>
-              <div className="text-xs uppercase tracking-wider text-teal-200">Verified Disbursed Balance</div>
+              <div className="text-xs uppercase tracking-wider text-rose-100">Disbursed balance</div>
               <div className="text-3xl font-extrabold mt-1">₹{record.balance_inr.toFixed(2)}</div>
             </div>
             <button
@@ -78,7 +87,7 @@ export function MemberView({ members }: { members: MemberSummary[] }) {
                   record.member.preferred_language
                 )
               }
-              className="flex items-center gap-2 bg-white text-teal-950 px-4 py-3 rounded-lg font-bold text-sm"
+              className="flex items-center gap-2 bg-white text-[var(--brand-dark)] px-4 py-3 rounded-lg font-bold text-sm"
             >
               <Volume2 className="w-5 h-5" />
               <span>Hear Balance</span>

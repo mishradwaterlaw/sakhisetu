@@ -1,11 +1,12 @@
 """Leader operations API: quarantine onboarding, order review, CP-SAT planner, QC, recovery, payout, usage (§4-§11)."""
 
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, Response
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.deps import ActorContext, get_optional_actor
 from app.database import get_db
 from app.models.governance import AgentEvent, Approval
 from app.models.intake import ExtractedField, InboundMessage, Order
@@ -142,6 +143,8 @@ def get_leader_dashboard(shg_id: str, db: Session = Depends(get_db)):
     buyers = db.scalars(select(Party).where(Party.party_type == "buyer")).all()
     materials = db.scalars(select(Material)).all()
     products = db.scalars(select(Product).where(Product.is_active.is_(True))).all()
+    product_names = dict(db.execute(select(Product.id, Product.name)).all())
+    buyer_names = {buyer.id: buyer.name for buyer in buyers}
 
     quote_checks = db.scalars(
         select(QuoteCheck).join(Order, Order.id == QuoteCheck.order_id).where(Order.shg_id == shg_id)
@@ -204,6 +207,8 @@ def get_leader_dashboard(shg_id: str, db: Session = Depends(get_db)):
             {
                 "id": o.id,
                 "order_code": o.order_code,
+                "product_name": product_names.get(o.product_id),
+                "buyer_name": buyer_names.get(o.buyer_party_id),
                 "status": o.status,
                 "quantity": o.quantity,
                 "offered_price_per_unit_inr": o.offered_price_per_unit_inr,
@@ -261,6 +266,48 @@ def get_leader_dashboard(shg_id: str, db: Session = Depends(get_db)):
             "recovery_actions_resolved": len(resolved_blockers),
         },
         "usage_summary": usage,
+    }
+
+
+@router.get("/shgs/{shg_id}/communications")
+def get_communications(
+    shg_id: str,
+    actor: ActorContext | None = Depends(get_optional_actor),
+    x_leader_id: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    if actor and (actor.role != "LEADER" or actor.shg_id != shg_id):
+        raise HTTPException(status_code=403, detail="Group leader access required")
+    leader_id = actor.actor_id if actor else x_leader_id
+    if not leader_id:
+        raise HTTPException(status_code=401, detail="Leader identity required")
+    leader = db.get(Member, leader_id)
+    if not leader or leader.role != "leader" or not leader.is_active or leader.shg_id != shg_id:
+        raise HTTPException(status_code=403, detail="Group leader access required")
+
+    rows = db.execute(
+        select(InboundMessage, Member.name, Party.name, Order.id, Order.order_code)
+        .outerjoin(Member, (Member.id == InboundMessage.sender_member_id) & (Member.shg_id == shg_id))
+        .outerjoin(Party, Party.id == InboundMessage.sender_party_id)
+        .outerjoin(Order, (Order.source_message_id == InboundMessage.id) & (Order.shg_id == shg_id))
+        .where(InboundMessage.shg_id == shg_id)
+        .order_by(InboundMessage.created_at.desc(), InboundMessage.id)
+    )
+    return {
+        "messages": [
+            {
+                "id": msg.id,
+                "channel": msg.channel,
+                "sender": member_name or party_name,
+                "text": msg.raw_text or msg.normalized_text,
+                "intent": msg.intent,
+                "quarantined": msg.is_quarantined,
+                "created_at": msg.created_at.isoformat(),
+                "order_id": order_id,
+                "order_code": order_code,
+            }
+            for msg, member_name, party_name, order_id, order_code in rows
+        ]
     }
 
 

@@ -1,21 +1,49 @@
-# Python
+# Local configuration and private keys
+.env
+.env.*
+!.env.example
+*.key
+*-key.pem
+*_key.pem
+*.p12
+*.pfx
+
+# Python environments, caches and packaging output
 .venv/
-*/.venv/
+venv/
 __pycache__/
-*/__pycache__/
 *.py[cod]
 *.egg-info/
+/backend/build/
 .pytest_cache/
-*/.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
 
-# Node / Frontend
+# Frontend dependencies and build output
 node_modules/
-*/node_modules/
 dist/
-*/dist/
+.vite/
+.vite-temp/
+*.tsbuildinfo
+coverage/
 
-# Secrets & local runtime
-.env
+# Runtime media, logs and SQLite databases (including journals)
 media_store/
+*.log
+npm-debug.log.*
 *.db
+*.db-*
+*.sqlite
+*.sqlite-*
 *.sqlite3
+*.sqlite3-*
+
+# OS metadata and editor working files
+.DS_Store
+Desktop.ini
+*.swp
+*.swo
+*~

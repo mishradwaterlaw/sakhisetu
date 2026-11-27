@@ -8,7 +8,7 @@ export const Tabs = TabsPrimitive.Root;
 export function TabsList({ className, ...props }: React.ComponentPropsWithoutRef<typeof TabsPrimitive.List>) {
   return (
     <TabsPrimitive.List
-      className={cn("inline-flex items-center gap-1 rounded border border-[#334155] bg-[#1E293B] p-1", className)}
+      className={cn("inline-flex flex-wrap items-center gap-1 rounded-xl border border-[var(--border-neutral)] bg-white p-1", className)}
       {...props}
     />
   );
@@ -18,7 +18,7 @@ export function TabsTrigger({ className, ...props }: React.ComponentPropsWithout
   return (
     <TabsPrimitive.Trigger
       className={cn(
-        "rounded px-3 py-1.5 type-scale-xs text-[#94A3B8] transition-colors data-[state=active]:bg-[#FFFFFF] data-[state=active]:text-[#0F172A]",
+        "inline-flex items-center gap-2 rounded-lg px-3 py-2 type-scale-sm text-[var(--text-secondary)] transition-colors data-[state=active]:bg-[var(--rose)] data-[state=active]:text-[var(--brand)]",
         className
       )}
       {...props}
@@ -48,7 +48,7 @@ export const Toast = React.forwardRef<
   <ToastPrimitive.Root
     ref={ref}
     className={cn(
-      "rounded border-2 border-[#0F172A] bg-[var(--bg-surface)] px-4 py-3 type-scale-sm text-[var(--text-primary)]",
+      "rounded-xl border border-[var(--border-neutral)] bg-[var(--bg-surface)] px-4 py-3 type-scale-sm text-[var(--text-primary)]",
       className
     )}
     {...props}
@@ -60,7 +60,7 @@ export function Input({ className, ...props }: React.InputHTMLAttributes<HTMLInp
   return (
     <input
       className={cn(
-        "w-full rounded border border-[var(--border-neutral)] bg-[var(--bg-surface)] px-2.5 py-2 type-scale-sm text-[var(--text-primary)] focus:border-[#0F172A] focus:outline-none",
+        "w-full rounded-lg border border-[var(--border-neutral)] bg-[var(--bg-surface)] px-2.5 py-2 type-scale-sm text-[var(--text-primary)] focus:border-[#0F172A] focus:outline-none",
         className
       )}
       {...props}

@@ -11,7 +11,10 @@ export function CafeView({ shgId, onSubmitted }: { shgId: string; onSubmitted: (
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const [submitting, setSubmitting] = useState(false);
+
   async function submit() {
+    setSubmitting(true);
     setError(null);
     setResult(null);
     try {
@@ -31,25 +34,25 @@ export function CafeView({ shgId, onSubmitted }: { shgId: string; onSubmitted: (
       onSubmitted();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to submit");
-    }
+    } finally { setSubmitting(false); }
   }
 
   return (
-    <section className="max-w-xl mx-auto bg-[var(--bg-surface)] border-2 border-[var(--border-neutral)] rounded p-4 space-y-4">
+    <section className="max-w-2xl bg-[var(--bg-surface)] border border-[var(--border-neutral)] rounded-xl p-5 space-y-4">
       <div className="flex items-center gap-2 border-b border-slate-200 pb-3">
-        <UserCheck className="w-6 h-6 text-teal-800" />
+        <UserCheck className="w-6 h-6 text-[var(--brand)]" />
         <div>
-          <h2 className="text-lg font-bold text-slate-900">JanAI Café — Assisted Entry</h2>
+          <h2 className="text-lg font-bold text-slate-900">Assisted entry</h2>
           <p className="text-xs text-slate-600">For members without a phone. Always confirm member consent first.</p>
         </div>
       </div>
 
       <div className="space-y-2">
-        <label className="block text-sm font-bold text-slate-800">1. Member Phone / ID</label>
+        <label htmlFor="cafe-phone" className="block text-sm font-bold text-slate-800">1. Member phone or ID</label>
         <input
-          value={memberPhone}
+          id="cafe-phone" value={memberPhone}
           onChange={(e) => setMemberPhone(e.target.value)}
-          className="w-full px-4 py-3 text-base border-2 border-slate-300 rounded-lg focus:border-teal-700 outline-none"
+          className="w-full px-4 py-3 text-base border border-[var(--border-neutral)] rounded-lg focus:border-teal-700 outline-none"
         />
       </div>
 
@@ -67,7 +70,7 @@ export function CafeView({ shgId, onSubmitted }: { shgId: string; onSubmitted: (
               onClick={() => setIntent(opt.id)}
               className={`py-3.5 px-3 rounded-lg border-2 text-sm font-bold transition ${
                 intent === opt.id
-                  ? "bg-teal-900 text-white border-teal-900"
+                  ? "bg-[var(--brand)] text-white border-[var(--brand)]"
                   : "bg-stone-50 text-slate-800 border-slate-300"
               }`}
             >
@@ -78,13 +81,13 @@ export function CafeView({ shgId, onSubmitted }: { shgId: string; onSubmitted: (
       </div>
 
       <div className="space-y-2">
-        <label className="block text-sm font-bold text-slate-800">3. Details spoken by member</label>
+        <label htmlFor="cafe-notes" className="block text-sm font-bold text-slate-800">3. Details spoken by member</label>
         <textarea
-          rows={3}
+          id="cafe-notes" rows={3}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           placeholder="e.g., Finished 15 cotton tote bags or sewing machine needle broke"
-          className="w-full px-4 py-3 text-base border-2 border-slate-300 rounded-lg focus:border-teal-700 outline-none"
+          className="w-full px-4 py-3 text-base border border-[var(--border-neutral)] rounded-lg focus:border-teal-700 outline-none"
         />
       </div>
 
@@ -93,7 +96,7 @@ export function CafeView({ shgId, onSubmitted }: { shgId: string; onSubmitted: (
           type="checkbox"
           checked={consented}
           onChange={(e) => setConsented(e.target.checked)}
-          className="w-5 h-5 mt-0.5 accent-teal-900"
+          className="w-5 h-5 mt-0.5 accent-[var(--brand)]"
         />
         <span className="text-sm font-semibold text-amber-950">
           Member is physically present and gave explicit consent to log this entry on her behalf.
@@ -110,10 +113,11 @@ export function CafeView({ shgId, onSubmitted }: { shgId: string; onSubmitted: (
 
       <button
         type="button"
+        disabled={!consented || !notes.trim() || !memberPhone.trim() || submitting}
         onClick={submit}
-        className="w-full py-3.5 bg-[#0F172A] hover:bg-[#1E293B] text-[#F8FAFC] type-scale-md rounded"
+        className="w-full py-3.5 bg-[var(--brand)] hover:bg-[var(--brand-dark)] text-[#F8FAFC] type-scale-md rounded-lg"
       >
-        Submit Consented Entry
+        {submitting ? "Submitting…" : "Submit consented entry"}
       </button>
     </section>
   );

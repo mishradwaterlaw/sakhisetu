@@ -8,33 +8,40 @@ From a buyer's order to every member's payout, SakhiSetu gives the group one sha
 
 ## Quickstart
 
-**Prerequisites**: Docker Desktop only (no local Python, Node.js, or PostgreSQL installation required).
+### Start both apps locally
 
-### Option A: Public Cloudflare Tunnel URLs (Recommended for remote testing)
-```sh
-make tunnel
-```
-This bootstraps `.env` from `.env.example` if missing, builds all containers, runs database migrations and idempotent demo seeding, and starts two Cloudflare Quick Tunnels (`trycloudflare.com`) pointing to the Leader PWA and the isolated Buyer Portal. Because both nginx containers proxy `/api/*` to the backend, each public HTTPS URL serves both the UI and the API without using `localhost`.
+Start Docker Desktop, or Docker Engine with the Compose v2 plugin. Clone or download the branch you want to try and open a terminal in the folder containing `docker-compose.yml`.
 
-If the tunnel URLs take a few extra seconds to appear, print them with:
+On a fresh clone, create the local environment file once. The example uses sandbox providers and works with the included demo data.
+
 ```sh
-docker compose --profile tunnel logs tunnel-leader tunnel-buyer | findstr trycloudflare
+cp .env.example .env
 ```
 
-### Option B: Localhost Stack
-```sh
-make up
-```
-Once healthy, you will see a seeded demo SHG (*Kaveri Mahila Sangha*), 5 active members, and a sample `DRAFT` order live at:
-- Leader, JanAI Cafe, and Member PWA: http://localhost:5173
-- Isolated Buyer Portal: http://localhost:5174
-- Backend API Docs (Swagger UI): http://localhost:8000/docs
-- Backend Healthcheck: http://localhost:8000/health
+Run this command for the first launch and again after pulling changes. Compose rebuilds both frontends and the API, starts PostgreSQL and Redis, and waits for the services to become healthy.
 
-To stop all services:
 ```sh
-make down
+docker compose up --build -d --wait
 ```
+
+| App | Local URL |
+| --- | --- |
+| Leader dashboard | [http://localhost:5173](http://localhost:5173/) |
+| Buyer portal | [http://localhost:5174](http://localhost:5174/) |
+
+The first launch seeds Kaveri Mahila Sangha, five members, and a sample draft order. Use `docker compose ps` to check service health. Use `docker compose down` to stop the local stack and keep its database for next time.
+
+### Share a live demo
+
+Friends who run their own copy can use the localhost links above. To let friends try the demo in a browser on your running stack, start the optional Cloudflare tunnels. Use sample data for this option because anyone with a tunnel URL can reach that app and its API.
+
+```sh
+docker compose --profile tunnel up -d --wait tunnel-leader tunnel-buyer
+docker compose logs --tail=50 tunnel-leader
+docker compose logs --tail=50 tunnel-buyer
+```
+
+Share the `https://…trycloudflare.com` URL from each service’s log and label it **Leader dashboard** or **Buyer portal**. Keep Docker running while friends try the apps. To end public sharing while continuing locally, run `docker compose --profile tunnel stop tunnel-leader tunnel-buyer`.
 
 ---
 

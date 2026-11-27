@@ -7,64 +7,39 @@ SakhiSetu Leader Operations is a high-trust financial and production operations 
 
 ---
 
-## 2. Exact Color Tokens (Hex)
+## 2. Workspace palette
 
-| Token | Role | Light Mode | Dark Mode |
-|---|---|---|---|
-| `--bg-base` | App canvas / page background | `#F4F5F7` | `#0F172A` |
-| `--bg-surface` | Operational cards, tables, panels | `#FFFFFF` | `#1E293B` |
-| `--bg-surface-muted` | Table headers, secondary rows | `#E8ECEF` | `#162032` |
-| `--text-primary` | Primary headings, ledger figures, labels | `#0F172A` | `#F8FAFC` |
-| `--text-secondary` | Supporting metadata, timestamps, hints | `#475569` | `#94A3B8` |
-| `--border-neutral` | 1px / 2px structural dividers & table rules | `#CBD5E1` | `#334155` |
-| `--accent-gate` | **EXCLUSIVELY** for approval-gate & money-moving actions | `#D97706` | `#F59E0B` |
-| `--accent-gate-text` | Text on `--accent-gate` | `#0F172A` | `#0F172A` |
-| `--status-warning` | Low-confidence extracted fields, QC flags, blockers | `#B45309` | `#FBBF24` |
-| `--status-warning-bg` | Warning surface tint | `#FEF3C7` | `#451A03` |
-| `--status-success` | Confirmed, QC passed, disbursed | `#047857` | `#34D399` |
-| `--status-success-bg` | Success surface tint | `#D1FAE5` | `#064E3B` |
-| `--status-danger` | Disputed, halted, validation error | `#B91C1C` | `#F87171` |
-| `--status-danger-bg` | Error / dispute surface tint | `#FEE2E2` | `#450A0A` |
+The leader and buyer interfaces use a warm neutral canvas, white panels, burgundy navigation and the SakhiSetu lotus mark. Keep the buyer portal in its own bundle and use group-level order summaries there.
 
-> **Strict Accent Rule**: `--accent-gate` (`#D97706` / `#F59E0B`) may NEVER be used decoratively (no badges, no chart bars, no nav highlights). It appears **only** on explicit human approval-gate and money-moving controls so its visual meaning is unmistakable.
->
-> **WCAG AA Contrast Verification**: Because approval-gate button text is `16px` (`12pt`) weight `800` (below WCAG's `18.66px` / `14pt` bold large-text threshold), the `4.5:1` normal-text standard applies. Measured contrast against `--accent-gate-text` (`#0F172A`): Light mode `#D97706` = **5.60:1** (passes AA `4.5:1`); Dark mode `#F59E0B` = **8.31:1** (passes AA `4.5:1` and AAA `7.0:1`).
->
-> **Buyer Portal (`frontend-buyer/`) Inheritance**: The genuinely separate `frontend-buyer` bundle reuses this exact `IBM Plex Sans` type scale and surface/text/status tokens (`--bg-base`, `--bg-surface`, `--text-primary`, `--text-secondary`, `--border-neutral`, `--status-success`, `--status-warning`) unchanged, and ships **only** the display-only summary tokens and components it uses—zero Leader-only components or `--accent-gate` approval controls are bundled into `frontend-buyer`.
+| Token | Role | Light theme |
+|---|---|---|
+| `--bg-base` | Workspace canvas | `#FAF8F7` |
+| `--bg-surface` | Cards and forms | `#FFFFFF` |
+| `--bg-surface-muted` | Table headers and supporting details | `#F8F5F4` |
+| `--text-primary` | Headings and figures | `#30242C` |
+| `--text-secondary` | Metadata and hints | `#736A6E` |
+| `--border-neutral` | Panel borders and table dividers | `#E7DFE0` |
+| `--brand` | Primary actions and links | `#922E52` |
+| `--brand-dark` | Page headings and decision panels | `#68203B` |
+| `--accent-gate` | Human approval controls | `#D97706` |
+| `--accent-gate-text` | Approval button text | `#0F172A` |
+| `--status-warning` / `--status-warning-bg` | Uncertain fields and blockers | `#8C571C` / `#FFF2DC` |
+| `--status-success` / `--status-success-bg` | Passed checks and confirmed decisions | `#31664D` / `#E9F3EC` |
+| `--status-danger` / `--status-danger-bg` | Disputes and errors | `#9D3047` / `#FFEDF0` |
 
----
+Reserve the solid amber approval color for explicit decisions. Pair status colors with readable labels. Use the local shadcn/ui primitives for leader buttons, dialogs, tables, tabs and badges.
 
-## 3. Defined Type Scale (6 Sizes Total — No Exceptions)
-No component in the Leader app may use a font size outside these 6 steps:
+## 3. Typography
 
-| Token | Size | Weight | Line Height | Usage |
-|---|---|---|---|---|
-| `type-scale-xs` | `12px` (`0.75rem`) | `600` | `16px` | Table column headers, status badges, timestamps |
-| `type-scale-sm` | `13px` (`0.8125rem`) | `500` | `18px` | Dense table cells, solver explanations, form labels |
-| `type-scale-base` | `14px` (`0.875rem`) | `500` | `20px` | Standard body text, input controls |
-| `type-scale-md` | `16px` (`1rem`) | `700` | `22px` | Panel headers, order codes, approval-gate CTA text |
-| `type-scale-lg` | `20px` (`1.25rem`) | `700` | `26px` | Section titles, KPI card numbers |
-| `type-scale-xl` | `24px` (`1.5rem`) | `800` | `30px` | Ledger totals, primary money figures |
+Bundle IBM Plex Sans with each frontend. Use tabular numbers for quantities, currency and chart values. Reserve the largest type for page titles and summary figures. Keep operational text at 13–16px and use smaller labels for chart axes, timestamps and table headers.
 
----
+## 4. Visual hierarchy
 
-## 4. Explicit Named Bans (Forbidden Patterns)
-1. **No decorative gradients** (`linear-gradient`, `radial-gradient`) anywhere in backgrounds, buttons, or headers.
-2. **No glassmorphism or frosted-glass effects** (`backdrop-blur`, translucent panels).
-3. **No centered hero-section layouts** with a large rounded CTA button.
-4. **No decorative background blob or wave SVG shapes**.
-5. **No emoji used as functional icons** — every icon uses `lucide-react` at a uniform `1.75px` stroke weight.
-6. **No unstyled default shadows** — use crisp `1px` or `2px` `--border-neutral` borders for elevation and hierarchy.
+Use thin borders and restrained rose, sage, lavender and amber tints to distinguish actions and statuses. Use Lucide icons at 1.75px stroke width. Keep the workshop illustration in the welcome panel and use a translucent area fill to distinguish the plotted delivery series.
 
----
+## 5. Responsive layout
 
-## 5. Operational Density Principle
-This is a daily operations console, not a marketing site.
-- Tables use compact `8px` vertical cell padding (`py-2 px-3`) and `tabular-nums` alignment.
-- Panels use `12px`–`16px` internal padding (`p-3` / `p-4`) and `12px` grid gaps (`gap-3`).
-- AI extraction confidence, `source_span`, and CP-SAT solver reasons appear **inline** next to the action they govern—never hidden behind secondary drawers.
-
----
+Keep the main navigation visible beside the workspace on desktop. At narrower widths, move it into the keyboard-accessible navigation dialog. Stack the order detail below the register when both panels cannot fit comfortably. Allow wide tables to scroll inside their own containers. Show extraction confidence, source text and allocation explanations alongside the order decision they support.
 
 ## 6. Mandatory 3-State Screen Checklist
 Every screen and panel MUST explicitly implement and render all three non-happy states:
@@ -75,7 +50,7 @@ Every screen and panel MUST explicitly implement and render all three non-happy 
 ---
 
 ## 7. Approval-Gate Dominance Rule
-Any screen involving a money-moving or group-decision action (`Confirm Order`, `Approve Price`, `Approve Allocation`, `Approve & Send Counter-Offer`, `Evaluate Contest Window`) MUST:
-1. Place the action in a dedicated **Approval Gate** container (`border-2 border-[#0F172A]`, `--bg-surface` or `#0F172A` header bar).
+Any screen involving a money-moving or group-decision action (`Confirm Order`, `Approve Price`, `Approve Allocation`, `Evaluate Contest Window`) MUST:
+1. Place the action in a dedicated decision panel or confirmation dialog. Use the dark burgundy surface to identify the next order decision.
 2. Render the primary approve button in `--accent-gate` (`#D97706`) with `--accent-gate-text` (`#0F172A`), `min-height: 44px`, `font-weight: 800`, and `text-scale-md` (`16px`), making it the single largest, highest-contrast interactive element on the screen.
 3. Require explicit Radix `Dialog` confirmation (with keyboard focus trap and `Esc` support) for irreversible money/external-send actions.

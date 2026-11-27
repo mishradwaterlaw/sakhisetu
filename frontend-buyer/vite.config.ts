@@ -7,8 +7,8 @@ export default defineConfig({
   server: {
     port: 5174,
     proxy: {
-      "/api/buyer": "http://localhost:8000",
-      "/api/bootstrap": "http://localhost:8000",
+      "/api/buyer": process.env.SAKHI_API_PROXY || "http://localhost:8000",
+      "/api/bootstrap": process.env.SAKHI_API_PROXY || "http://localhost:8000",
     },
   },
 });

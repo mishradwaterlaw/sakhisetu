@@ -1,10 +1,9 @@
 import { useState } from "react";
-import { AlertTriangle, Camera, CheckCircle2, ClipboardList, MessageSquare, PackagePlus, Scale, TrendingUp } from "lucide-react";
-import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { AlertTriangle, Camera, CheckCircle2, ClipboardList, Copy, Scale, TrendingUp } from "lucide-react";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { apiFetch } from "../api";
 import { Button } from "./ui/button";
 import { Card, CardHeader, CardTitle } from "./ui/card";
-import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "./ui/dialog";
 import { Table, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { Input } from "./ui/tabs-toast";
 
@@ -25,35 +24,18 @@ export function ImpactMetricWidget({
     );
   }
 
-  const chartData = [
-    { name: "Underpricing Caught (₹)", value: underpricingCaughtInr, fill: "#047857" },
-    { name: "Recoveries Resolved", value: recoveryActionsResolved, fill: "#0F172A" },
-  ];
-
   return (
-    <Card className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
-      <div className="md:col-span-7 space-y-1">
-        <div className="flex items-center gap-1.5 type-scale-xs uppercase text-[var(--text-secondary)]">
-          <TrendingUp className="w-4 h-4 text-[var(--status-success)]" strokeWidth={1.75} />
-          <span>Measured Group Protection (QuoteCheck &amp; Recovery Audit)</span>
+    <Card>
+      <div className="panel-heading"><h2><TrendingUp />Group protection</h2></div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="rounded-lg bg-[var(--status-success-bg)] p-4">
+          <p className="type-scale-sm">Underpricing caught</p>
+          <strong className="large-value">₹{underpricingCaughtInr.toLocaleString("en-IN", { maximumFractionDigits: 2 })}</strong>
         </div>
-        <div className="type-scale-lg text-[var(--text-primary)] tabular-nums">
-          ₹{underpricingCaughtInr.toFixed(2)} caught in underpricing • {recoveryActionsResolved} recovery actions resolved
+        <div className="rounded-lg bg-[var(--bg-surface-muted)] p-4">
+          <p className="type-scale-sm">Recovery actions resolved</p>
+          <strong className="large-value">{recoveryActionsResolved}</strong>
         </div>
-      </div>
-      <div className="md:col-span-5 h-20">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={chartData} layout="vertical" margin={{ top: 2, right: 16, bottom: 2, left: 10 }}>
-            <XAxis type="number" hide />
-            <YAxis type="category" dataKey="name" width={135} tick={{ fontSize: 11, fill: "#475569" }} />
-            <Tooltip />
-            <Bar dataKey="value" radius={[0, 3, 3, 0]}>
-              {chartData.map((entry, idx) => (
-                <Cell key={idx} fill={entry.fill} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
       </div>
     </Card>
   );
@@ -75,6 +57,7 @@ export function ManualOrderForm({
   const [buyerId, setBuyerId] = useState(buyers[0]?.id || "");
   const [productName, setProductName] = useState(products[0]?.name || "Cotton Tote Bag");
   const [qty, setQty] = useState(25);
+  const [days, setDays] = useState(10);
   const [price, setPrice] = useState(175);
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -93,9 +76,10 @@ export function ManualOrderForm({
           product_name: productName,
           quantity: Number(qty),
           offered_price_per_unit_inr: Number(price),
-          due_in_days: 10,
+          due_in_days: days,
         }),
       });
+      if (!res.order_id) throw new Error("The request was received without a draft. Review it in Communications.");
       onCreated(res.order_id);
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Failed to create draft order");
@@ -105,42 +89,21 @@ export function ManualOrderForm({
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-1.5">
-          <PackagePlus className="w-4 h-4" strokeWidth={1.75} />
-          <span>Manual Order Entry (§21 — Enters as DRAFT)</span>
-        </CardTitle>
-      </CardHeader>
-      {err && (
-        <div className="mb-2 rounded border border-[var(--status-danger)] bg-[var(--status-danger-bg)] px-3 py-2 type-scale-xs text-[var(--status-danger)]">
-          {err}
-        </div>
-      )}
-      {buyers.length === 0 ? (
-        <div className="type-scale-sm text-[var(--text-secondary)]">No buyers onboarded yet.</div>
-      ) : (
-        <form onSubmit={submit} className="grid grid-cols-1 sm:grid-cols-5 gap-2">
-          <select
-            value={buyerId || buyers[0]?.id || ""}
-            onChange={(e) => setBuyerId(e.target.value)}
-            className="rounded border border-[var(--border-neutral)] bg-[var(--bg-surface)] px-2.5 py-2 type-scale-sm"
-          >
-            {buyers.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name}
-              </option>
-            ))}
-          </select>
-          <Input value={productName} onChange={(e) => setProductName(e.target.value)} placeholder="Product" />
-          <Input type="number" min={1} value={qty} onChange={(e) => setQty(Number(e.target.value))} placeholder="Qty" />
-          <Input type="number" min={1} value={price} onChange={(e) => setPrice(Number(e.target.value))} placeholder="Offer ₹/u" />
-          <Button type="submit" variant="primary" disabled={submitting}>
-            {submitting ? "Creating..." : "Create Draft"}
-          </Button>
+    <div className="form-stack">
+      {err && <div className="error-box" role="alert">{err}</div>}
+      {!buyers.length ? <p className="quiet">Onboard a buyer in Communications to create an order.</p> : (
+        <form onSubmit={submit} className="form-stack">
+          <label className="field">Buyer<select value={buyerId || buyers[0]?.id || ""} onChange={e => setBuyerId(e.target.value)}>
+            {buyers.map(buyer => <option key={buyer.id} value={buyer.id}>{buyer.name}</option>)}
+          </select></label>
+          <label className="field">Product<Input required value={productName} onChange={e => setProductName(e.target.value)}/></label>
+          <div className="field-pair"><label className="field">Quantity (units)<Input required type="number" min={1} value={qty || ""} onChange={e => setQty(Number(e.target.value))}/></label>
+          <label className="field">Offer per unit (₹)<Input required type="number" min={0.01} step="0.01" value={price || ""} onChange={e => setPrice(Number(e.target.value))}/></label></div>
+          <label className="field">Due in (days)<Input required type="number" min={1} value={days || ""} onChange={e => setDays(Number(e.target.value))}/></label>
+          <Button type="submit" variant="primary" disabled={submitting || !productName.trim()}>{submitting ? "Creating…" : "Create draft order"}</Button>
         </form>
       )}
-    </Card>
+    </div>
   );
 }
 
@@ -171,7 +134,7 @@ export function LiveMemberTrackingTable({
       <CardHeader>
         <CardTitle className="flex items-center gap-1.5">
           <ClipboardList className="w-4 h-4" strokeWidth={1.75} />
-          <span>Live Member Production Tracking (Flow A)</span>
+          <span>Member production</span>
         </CardTitle>
       </CardHeader>
 
@@ -190,8 +153,8 @@ export function LiveMemberTrackingTable({
                 <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#475569" }} />
                 <YAxis tick={{ fontSize: 11, fill: "#475569" }} />
                 <Tooltip />
-                <Bar dataKey="assigned_units" name="Assigned Units" fill="#0F172A" />
-                <Bar dataKey="passed_units" name="QC Passed Units" fill="#047857" />
+                <Bar dataKey="assigned_units" name="Assigned Units" fill="#973659" />
+                <Bar dataKey="passed_units" name="QC Passed Units" fill="#538069" />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -274,7 +237,7 @@ export function SideBySideQCQueue({
       <CardHeader>
         <CardTitle className="flex items-center gap-1.5">
           <Camera className="w-4 h-4" strokeWidth={1.75} />
-          <span>Side-by-Side Human QC Queue</span>
+          <span>Quality checks</span>
         </CardTitle>
         <span className="type-scale-xs text-[var(--text-secondary)]">Rubric: {rubric?.status || "STUB"}</span>
       </CardHeader>
@@ -338,6 +301,7 @@ export function SupplierAndCounterOfferPanel({
   const [quotes, setQuotes] = useState<
     { supplier_quote_id: string; supplier_name: string; unit_price_inr: number; total_cost_inr: number; delivery_days: number }[]
   >([]);
+  const [hasCompared, setHasCompared] = useState(false);
   const [loadingQuotes, setLoadingQuotes] = useState(false);
   const [draftMsg, setDraftMsg] = useState("");
   const [sentNotice, setSentNotice] = useState<string | null>(null);
@@ -352,6 +316,7 @@ export function SupplierAndCounterOfferPanel({
         `/api/leader/supplier-quotes/compare?material_id=${materials[0].id}&required_quantity=50`
       );
       setQuotes(res.quotes);
+      setHasCompared(true);
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Failed to load supplier quotes");
     } finally {
@@ -377,10 +342,10 @@ export function SupplierAndCounterOfferPanel({
       <CardHeader className="mb-1">
         <CardTitle className="flex items-center gap-1.5">
           <Scale className="w-4 h-4" strokeWidth={1.75} />
-          <span>Supplier Comparison &amp; Counter-Offer Draft (§15)</span>
+          <span>Supplier quotes and counter-offer</span>
         </CardTitle>
         <div className="flex gap-1.5">
-          <Button onClick={loadQuotes}>Compare Suppliers</Button>
+          <Button disabled={loadingQuotes || !materials.length} onClick={loadQuotes}>Compare Suppliers</Button>
           <Button variant="primary" onClick={loadCounterOffer}>
             Draft Counter-Offer
           </Button>
@@ -398,7 +363,7 @@ export function SupplierAndCounterOfferPanel({
           Comparing supplier quotes...
         </div>
       ) : quotes.length === 0 ? (
-        <div className="type-scale-xs text-[var(--text-secondary)]">Click "Compare Suppliers" to view material quotes side-by-side.</div>
+        <div className="type-scale-xs text-[var(--text-secondary)]">{hasCompared ? "No supplier quotes are available for this material." : "Compare material costs and delivery times."}</div>
       ) : (
         <Table>
           <TableHeader>
@@ -425,43 +390,18 @@ export function SupplierAndCounterOfferPanel({
       {draftMsg && (
         <div className="space-y-2 rounded border-2 border-[#0F172A] bg-[var(--bg-surface)] p-3">
           <div className="type-scale-xs text-[var(--status-warning)]">
-            Review and edit before sending — never auto-sent to external buyer.
+            Review the wording, then copy the counter-offer for the buyer.
           </div>
           <textarea
             rows={3}
-            value={draftMsg}
-            onChange={(e) => setDraftMsg(e.target.value)}
+            aria-label="Counter-offer draft" value={draftMsg}
+            onChange={(e) => { setDraftMsg(e.target.value); setSentNotice(null); }}
             className="w-full rounded border border-[var(--border-neutral)] p-2 type-scale-sm"
           />
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button variant="approvalGate" className="w-full sm:w-auto">
-                <MessageSquare className="w-4 h-4" strokeWidth={1.75} /> Approve &amp; Send Counter-Offer
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogTitle>Confirm Counter-Offer Dispatch</DialogTitle>
-              <DialogDescription>
-                This sends your reviewed counter-offer to the buyer channel. Verify the exact message below:
-              </DialogDescription>
-              <p className="mt-3 rounded border border-[var(--border-neutral)] bg-[var(--bg-surface-muted)] p-2.5 type-scale-sm">
-                {draftMsg}
-              </p>
-              <div className="mt-4 flex justify-end gap-2">
-                <DialogClose asChild>
-                  <Button>Cancel</Button>
-                </DialogClose>
-                <DialogClose asChild>
-                  <Button
-                    variant="approvalGate"
-                    onClick={() => setSentNotice("Counter-offer approved and queued for buyer channel.")}
-                  >
-                    Confirm &amp; Send
-                  </Button>
-                </DialogClose>
-              </div>
-            </DialogContent>
-          </Dialog>
+          <Button variant="primary" disabled={!draftMsg.trim()} onClick={async () => {
+            try { await navigator.clipboard.writeText(draftMsg); setSentNotice("Counter-offer copied."); }
+            catch { setErr("Select the draft text and use your device’s copy command."); }
+          }}><Copy size={15}/>Copy counter-offer</Button>
           {sentNotice && <div className="type-scale-xs text-[var(--status-success)]">{sentNotice}</div>}
         </div>
       )}
