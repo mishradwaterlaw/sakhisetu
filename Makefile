@@ -21,7 +21,7 @@ tunnel:
 	@echo "============================================================"
 
 down:
-	docker compose down
+	docker compose --profile tunnel down
 
 clean:
-	docker compose down -v --rmi local
+	docker compose --profile tunnel down -v --rmi local
