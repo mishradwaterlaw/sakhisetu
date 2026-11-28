@@ -170,3 +170,67 @@ def test_qc_decision_enforces_rotating_committee_membership(client, db_session):
     )
     assert good.status_code == 200
     assert good.json()["rotation_id"] == rot.id
+
+
+def test_leader_autonomous_quantity_override_and_split_addition(client, db_session):
+    shg = db_session.query(SHG).first()
+    leader = db_session.query(Member).filter_by(shg_id=shg.id, role="leader").first()
+    members = db_session.query(Member).filter_by(shg_id=shg.id, role="member").all()
+
+    order = Order(shg_id=shg.id, order_code="ORD-QTY1", status="ALLOCATION_PROPOSED", quantity=10)
+    db_session.add(order)
+    db_session.flush()
+
+    task = Task(
+        order_id=order.id,
+        step_name="stitch",
+        required_skill="stitching",
+        total_units=10,
+        minutes_per_unit=10.0,
+        piece_rate_inr=25.0,
+    )
+    db_session.add(task)
+    db_session.flush()
+
+    orig = TaskAssignment(
+        order_id=order.id,
+        task_id=task.id,
+        member_id=members[0].id,
+        assigned_units=10,
+        estimated_minutes=100.0,
+        solver_explanation="Initial solver plan",
+        status="PROPOSED",
+    )
+    db_session.add(orig)
+    db_session.commit()
+
+    # Leader splits 10u into 6u for members[0] + 4u for members[1]
+    resp = client.post(
+        f"/api/leader/orders/{order.id}/approve-allocation",
+        json={
+            "leader_id": leader.id,
+            "overrides": [
+                {
+                    "assignment_id": orig.id,
+                    "new_member_id": members[0].id,
+                    "assigned_units": 6,
+                    "reason": "Reduced to 6u",
+                }
+            ],
+            "new_assignments": [
+                {
+                    "task_id": task.id,
+                    "member_id": members[1].id,
+                    "assigned_units": 4,
+                    "reason": "Split remaining 4u",
+                }
+            ],
+        },
+    )
+    assert resp.status_code == 200
+    rows = db_session.query(TaskAssignment).filter_by(order_id=order.id).all()
+    active = [r for r in rows if r.status == "APPROVED"]
+    assert sum(r.assigned_units for r in active) == 10
+    assert {r.member_id: r.assigned_units for r in active} == {members[0].id: 6, members[1].id: 4}
+    db_session.refresh(orig)
+    assert orig.status == "OVERRIDDEN"

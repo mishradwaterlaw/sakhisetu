@@ -65,7 +65,8 @@ class ApprovePricingIn(BaseModel):
 
 class ApproveAllocationIn(BaseModel):
     leader_id: str
-    overrides: list[dict] = []  # [{"assignment_id": ..., "new_member_id": ..., "reason": ...}]
+    overrides: list[dict] = []  # [{"assignment_id": ..., "new_member_id": ..., "assigned_units": ..., "reason": ...}]
+    new_assignments: list[dict] = []  # [{"task_id": ..., "member_id": ..., "assigned_units": ..., "reason": ...}]
 
 
 class RubricIn(BaseModel):
@@ -406,6 +407,7 @@ def get_order_review_detail(order_id: str, db: Session = Depends(get_db)):
                 "id": t.id,
                 "step_name": t.step_name,
                 "required_skill": t.required_skill,
+                "required_tools": list(t.required_tools or []),
                 "total_units": t.total_units,
                 "minutes_per_unit": t.minutes_per_unit,
                 "piece_rate_inr": t.piece_rate_inr,
@@ -613,27 +615,60 @@ def approve_allocation(order_id: str, body: ApproveAllocationIn, db: Session = D
     for ov in body.overrides:
         ta = db.get(TaskAssignment, ov["assignment_id"])
         if ta and ta.order_id == order_id and ta.status != "OVERRIDDEN":
-            override_reason = ov.get("reason", "Leader override")
+            new_member_id = ov.get("new_member_id") or ta.member_id
+            new_units = int(ov["assigned_units"]) if ov.get("assigned_units") is not None else ta.assigned_units
+            if new_member_id == ta.member_id and new_units == ta.assigned_units:
+                continue
+            override_reason = ov.get("reason") or "Leader adjustment"
             ta.status = "OVERRIDDEN"
-            db.add(
-                TaskAssignment(
-                    order_id=ta.order_id,
-                    task_id=ta.task_id,
-                    member_id=ov["new_member_id"],
-                    assigned_units=ta.assigned_units,
-                    completed_units=0,
-                    passed_units=0,
-                    estimated_minutes=ta.estimated_minutes,
-                    solver_explanation=f"Leader override replacing assignment {ta.id}: {override_reason}",
-                    solver_metadata={
-                        "overridden_assignment_id": ta.id,
-                        "previous_member_id": ta.member_id,
-                    },
-                    is_leader_override=True,
-                    override_reason=override_reason,
-                    status="APPROVED",
+            if new_units > 0:
+                task = db.get(Task, ta.task_id)
+                est_minutes = round(new_units * task.minutes_per_unit, 2) if task else ta.estimated_minutes
+                db.add(
+                    TaskAssignment(
+                        order_id=ta.order_id,
+                        task_id=ta.task_id,
+                        member_id=new_member_id,
+                        assigned_units=new_units,
+                        completed_units=0,
+                        passed_units=0,
+                        estimated_minutes=est_minutes,
+                        solver_explanation=f"Leader adjustment replacing assignment {ta.id}: {override_reason}",
+                        solver_metadata={
+                            "overridden_assignment_id": ta.id,
+                            "previous_member_id": ta.member_id,
+                            "previous_units": ta.assigned_units,
+                        },
+                        is_leader_override=True,
+                        override_reason=override_reason,
+                        status="APPROVED",
+                    )
                 )
+
+    for na in body.new_assignments:
+        units = int(na.get("assigned_units") or 0)
+        if units <= 0:
+            continue
+        task = db.get(Task, na.get("task_id"))
+        if not task or task.order_id != order_id:
+            continue
+        reason = na.get("reason") or "Leader manual addition"
+        db.add(
+            TaskAssignment(
+                order_id=order_id,
+                task_id=task.id,
+                member_id=na["member_id"],
+                assigned_units=units,
+                completed_units=0,
+                passed_units=0,
+                estimated_minutes=round(units * task.minutes_per_unit, 2),
+                solver_explanation=f"Leader added assignment: {reason}",
+                solver_metadata={"added_by_leader": True},
+                is_leader_override=True,
+                override_reason=reason,
+                status="APPROVED",
             )
+        )
 
     try:
         approval = record_approval_and_transition(
@@ -646,7 +681,7 @@ def approve_allocation(order_id: str, body: ApproveAllocationIn, db: Session = D
             target_state="ALLOCATION_APPROVED",
             actor_type="LEADER",
             actor_id=body.leader_id,
-            reason=f"Allocation approved ({len(body.overrides)} overrides)",
+            reason=f"Allocation approved ({len(body.overrides)} overrides, {len(body.new_assignments)} additions)",
         )
         assignments = db.scalars(select(TaskAssignment).where(TaskAssignment.order_id == order_id)).all()
         for a in assignments:

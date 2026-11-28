@@ -24,7 +24,17 @@ export interface DashboardData {
     rotation_id: string | null;
     breakdown_snapshot: { member_id: string; member_name: string; units: number; amount_inr: number }[];
   }[];
-  members: { id: string; name: string; role: string; preferred_language: string; default_channel: string }[];
+  members: {
+    id: string;
+    name: string;
+    role: string;
+    preferred_language: string;
+    default_channel: string;
+    skills?: string[];
+    tools?: string[];
+    available_minutes_per_day?: number;
+    workload_preference?: string;
+  }[];
   buyers: { id: string; name: string }[];
   materials: { id: string; name: string; unit: string }[];
   products: { id: string; name: string; sku: string }[];
@@ -52,8 +62,18 @@ export interface OrderDetail {
     source_span: string | null;
     is_uncertain: boolean;
   }[];
+  tasks?: {
+    id: string;
+    step_name: string;
+    required_skill: string;
+    required_tools?: string[];
+    total_units: number;
+    minutes_per_unit: number;
+    piece_rate_inr: number;
+  }[];
   assignments: {
     id: string;
+    task_id?: string;
     member_id?: string;
     member_name: string;
     assigned_units: number;
