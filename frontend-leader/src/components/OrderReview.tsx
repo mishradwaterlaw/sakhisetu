@@ -770,10 +770,53 @@ export function OrderReview({
             onCounterOfferSent={() => refresh("Counter-offer sent to buyer.")}
           />
 
+          {(orderDetail.blockers || []).filter((b) => b.status === "OPEN").length > 0 && (
+            <div className="space-y-2">
+              <div className="type-scale-xs uppercase text-[var(--status-danger)] font-bold">
+                Open Blockers — Recovery Options
+              </div>
+              {(orderDetail.blockers || [])
+                .filter((b) => b.status === "OPEN")
+                .map((b) => (
+                  <div
+                    key={b.id}
+                    className="rounded border border-[var(--status-danger)] bg-[var(--status-danger-bg)] p-2.5 type-scale-xs space-y-2"
+                  >
+                    <div className="font-bold">
+                      {b.reason} ({b.remaining_units} units remaining)
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {b.options.map((opt, idx) => (
+                        <Button
+                          key={opt.id}
+                          variant="approvalGate"
+                          onClick={() =>
+                            runAction(async () => {
+                              await apiFetch(`/api/leader/blockers/${b.id}/approve-recovery`, {
+                                method: "POST",
+                                body: JSON.stringify({
+                                  leader_id: leaderId,
+                                  recovery_option_id: opt.id,
+                                }),
+                              });
+                            }, `Recovery Option ${idx === 0 ? "A" : "B"} approved.`)
+                          }
+                        >
+                          Approve Option {idx === 0 ? "A" : "B"}: {opt.summary}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+            </div>
+          )}
+
           {orderDetail.assignments.length > 0 && (
             <SideBySideQCQueue
               orderId={orderDetail.order.id}
               leaderId={leaderId}
+              members={members}
+              qualityRotation={orderDetail.quality_rotation}
               assignments={orderDetail.assignments}
               rubric={orderDetail.rubric}
               onRecorded={() => refresh("Quality decision recorded.")}

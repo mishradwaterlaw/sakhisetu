@@ -24,7 +24,7 @@ import { Overview } from "./components/Overview";
 import { Orders } from "./components/Orders";
 import { Communications } from "./components/Communications";
 import { CafeView } from "./components/CafeView";
-import { ImpactMetricWidget, LiveMemberTrackingTable, ManualOrderForm } from "./components/LeaderPanels";
+import { BankSummaryPanel, ImpactMetricWidget, LiveMemberTrackingTable, ManualOrderForm } from "./components/LeaderPanels";
 import { MemberView } from "./components/MemberView";
 import { StatusBadge } from "./components/StatusBadge";
 import { Button } from "./components/ui/button";
@@ -451,6 +451,7 @@ export default function App() {
                       <p className="quiet">{dash.usage_summary.period_ym}</p>
                       <strong className="large-value">{money(dash.usage_summary.total_cost_inr)}</strong>
                     </Card>
+                    <BankSummaryPanel shgId={dash.shg.id} leaderId={leaderId} />
                   </div>
                 )}
               </>

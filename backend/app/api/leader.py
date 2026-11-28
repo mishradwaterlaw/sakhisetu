@@ -115,6 +115,8 @@ class GrantConsentIn(BaseModel):
     recipient_type: str = "BANK"
     recipient_id: str | None = None
     purpose: str = "Bank payout disbursement file export"
+    group_committee_approved: bool = False
+    member_ids: list[str] | None = None
 
 
 @router.get("/shgs/{shg_id}/dashboard")
@@ -205,7 +207,13 @@ def get_leader_dashboard(shg_id: str, db: Session = Depends(get_db)):
         )
 
     return {
-        "shg": {"id": shg.id, "name": shg.name, "village": shg.village, "language": shg.primary_language},
+        "shg": {
+            "id": shg.id,
+            "name": shg.name,
+            "village": shg.village,
+            "language": shg.primary_language,
+            "federation_id": shg.federation_id,
+        },
         "orders": [
             {
                 "id": o.id,
@@ -377,6 +385,19 @@ def get_order_review_detail(order_id: str, db: Session = Depends(get_db)):
     assignments = db.scalars(select(TaskAssignment).where(TaskAssignment.order_id == order_id)).all()
     rubric = db.scalar(select(QualityRubric).where(QualityRubric.order_id == order_id))
     qc_checks = db.scalars(select(QCCheck).where(QCCheck.order_id == order_id)).all()
+    quality_rot = db.scalar(
+        select(ReviewRotation)
+        .where(
+            ReviewRotation.shg_id == order.shg_id,
+            ReviewRotation.purpose == "QUALITY",
+            ReviewRotation.target_entity_type == "order",
+            ReviewRotation.target_entity_id == order_id,
+        )
+        .order_by(ReviewRotation.created_at.desc())
+    )
+    order_blockers = db.scalars(
+        select(Blocker).where(Blocker.order_id == order_id).order_by(Blocker.created_at.desc())
+    ).all()
     from app.models.pricing import QuoteCheck
 
     latest_quote = db.scalar(
@@ -475,6 +496,34 @@ def get_order_review_detail(order_id: str, db: Session = Depends(get_db)):
             if latest_quote
             else None
         ),
+        "quality_rotation": (
+            {
+                "id": quality_rot.id,
+                "selected_member_ids": list(quality_rot.selected_member_ids or []),
+            }
+            if quality_rot
+            else None
+        ),
+        "blockers": [
+            {
+                "id": b.id,
+                "reason": b.reason,
+                "remaining_units": b.remaining_units,
+                "status": b.status,
+                "options": [
+                    {
+                        "id": o.id,
+                        "option_type": o.option_type,
+                        "summary": o.summary,
+                        "is_selected": o.is_selected,
+                    }
+                    for o in db.scalars(
+                        select(RecoveryOption).where(RecoveryOption.blocker_id == b.id)
+                    ).all()
+                ],
+            }
+            for b in order_blockers
+        ],
     }
 
 
@@ -942,7 +991,11 @@ def grant_shg_consent(shg_id: str, body: GrantConsentIn, db: Session = Depends(g
         recipient_type=body.recipient_type,
         recipient_id=body.recipient_id,
         purpose=body.purpose,
-        scope={"shg_id": shg_id},
+        scope={
+            "shg_id": shg_id,
+            "group_committee_approved": body.group_committee_approved,
+        },
+        member_ids=body.member_ids,
     )
     db.commit()
     return {"consent_event_id": ev.id}

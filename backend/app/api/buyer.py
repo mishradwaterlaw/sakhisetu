@@ -6,15 +6,33 @@ Structurally incapable of exposing individual member identities, assignments, or
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.api.deps import ActorContext, require_buyer_actor
 from app.database import get_db
 from app.models.intake import Order
+from app.models.pricing import QuoteCheck
 from app.services.state_machine import StateTransitionError, get_transition_spec
 
 router = APIRouter(prefix="/api/buyer", tags=["buyer"])
+
+
+def _latest_pricing_for_order(db: Session, order_id: str) -> dict | None:
+    qc = db.scalar(
+        select(QuoteCheck).where(QuoteCheck.order_id == order_id).order_by(QuoteCheck.created_at.desc())
+    )
+    if not qc:
+        return None
+    return {
+        "material_cost_inr": qc.material_cost_inr,
+        "labour_cost_inr": qc.labour_cost_inr,
+        "overhead_inr": qc.overhead_inr,
+        "margin_inr": qc.margin_inr,
+        "minimum_viable_price_per_unit_inr": qc.minimum_viable_price_per_unit_inr,
+        "buyer_offer_per_unit_inr": qc.buyer_offer_per_unit_inr,
+        "recommendation": qc.recommendation,
+    }
 
 
 @router.get("/orders")
@@ -47,7 +65,12 @@ def list_buyer_orders(
         {"buyer_id": actor.party_id},
     ).mappings().all()
 
-    return {"buyer_party_id": actor.party_id, "orders": [dict(r) for r in rows]}
+    orders = []
+    for r in rows:
+        item = dict(r)
+        item["pricing_breakdown"] = _latest_pricing_for_order(db, item["order_id"])
+        orders.append(item)
+    return {"buyer_party_id": actor.party_id, "orders": orders}
 
 
 @router.get("/orders/{order_id}")
@@ -83,7 +106,9 @@ def get_buyer_order_detail(
 
     if not row:
         raise HTTPException(status_code=404, detail="Order not found for this buyer")
-    return dict(row)
+    item = dict(row)
+    item["pricing_breakdown"] = _latest_pricing_for_order(db, item["order_id"])
+    return item
 
 
 class BuyerRevisedOfferBody(BaseModel):

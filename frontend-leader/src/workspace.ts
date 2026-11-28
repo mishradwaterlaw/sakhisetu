@@ -1,5 +1,5 @@
 export interface DashboardData {
-  shg: { id: string; name: string; village: string; language: string };
+  shg: { id: string; name: string; village: string; language: string; federation_id?: string | null };
   orders: {
     id: string;
     order_code: string;
@@ -94,6 +94,17 @@ export interface OrderDetail {
     recommendation: string;
     market_trend_note: string;
   } | null;
+  quality_rotation?: {
+    id: string;
+    selected_member_ids: string[];
+  } | null;
+  blockers?: {
+    id: string;
+    reason: string;
+    remaining_units: number;
+    status: string;
+    options: { id: string; option_type: string; summary: string; is_selected: boolean }[];
+  }[];
 }
 
 export type Order = DashboardData["orders"][number];

@@ -199,19 +199,36 @@ export function LiveMemberTrackingTable({
 export function SideBySideQCQueue({
   orderId,
   leaderId,
+  members = [],
+  qualityRotation,
   assignments,
   rubric,
   onRecorded,
 }: {
   orderId: string;
   leaderId: string;
-  assignments: { id: string; member_name: string; assigned_units: number; passed_units: number }[];
+  members?: { id: string; name: string }[];
+  qualityRotation?: { id: string; selected_member_ids: string[] } | null;
+  assignments: { id: string; member_id?: string; member_name: string; assigned_units: number; passed_units: number }[];
   rubric: { status: string; criteria: { criterion: string; target: string }[] } | null;
   onRecorded: () => void;
 }) {
   const [flagReason, setFlagReason] = useState("Uneven seam allowance");
   const [err, setErr] = useState<string | null>(null);
   const eligible = assignments.filter((a) => a.assigned_units > 0);
+  const rotationIds = qualityRotation?.selected_member_ids || [];
+  const eligibleReviewers =
+    rotationIds.length > 0
+      ? members.filter((m) => rotationIds.includes(m.id))
+      : members.filter((m) => !assignments.some((a) => a.member_id === m.id));
+  const [selectedReviewerId, setSelectedReviewerId] = useState(
+    eligibleReviewers[0]?.id || rotationIds[0] || leaderId,
+  );
+  const activeReviewerId =
+    eligibleReviewers.some((m) => m.id === selectedReviewerId)
+      ? selectedReviewerId
+      : eligibleReviewers[0]?.id || rotationIds[0] || leaderId;
+  const leaderOnRotation = rotationIds.length === 0 || rotationIds.includes(leaderId);
 
   async function recordDecision(assignmentId: string, outcome: "PASS" | "FLAG" | "ESCALATE", units: number) {
     setErr(null);
@@ -220,7 +237,7 @@ export function SideBySideQCQueue({
         method: "POST",
         body: JSON.stringify({
           assignment_id: assignmentId,
-          reviewer_member_id: leaderId,
+          reviewer_member_id: activeReviewerId,
           units_checked: Math.max(1, units),
           outcome,
           flag_reason: outcome === "PASS" ? null : flagReason,
@@ -241,6 +258,30 @@ export function SideBySideQCQueue({
         </CardTitle>
         <span className="type-scale-xs text-[var(--text-secondary)]">Rubric: {rubric?.status || "STUB"}</span>
       </CardHeader>
+
+      {!leaderOnRotation && (
+        <div className="mb-2 rounded border border-[var(--status-warning)] bg-[var(--status-warning-bg)] px-3 py-2 type-scale-xs text-[var(--status-warning)]">
+          You are not on the rotating QC committee for this order. Select an assigned committee reviewer below to record her decision.
+        </div>
+      )}
+
+      {eligibleReviewers.length > 0 && (
+        <div className="mb-2 flex flex-wrap items-center gap-2 type-scale-xs">
+          <span className="font-bold">Rotating QC Reviewer:</span>
+          <select
+            aria-label="Rotating QC Reviewer"
+            value={activeReviewerId}
+            onChange={(e) => setSelectedReviewerId(e.target.value)}
+            className="rounded border border-[var(--border-neutral)] bg-[var(--bg-surface)] px-2 py-1"
+          >
+            {eligibleReviewers.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name}{rotationIds.includes(m.id) ? " (On rotation)" : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {err && (
         <div className="mb-2 rounded border border-[var(--status-danger)] bg-[var(--status-danger-bg)] px-3 py-2 type-scale-xs text-[var(--status-danger)]">
@@ -479,6 +520,112 @@ export function SupplierAndCounterOfferPanel({
           </div>
           {sentNotice && <div className="type-scale-xs text-[var(--status-success)]">{sentNotice}</div>}
         </div>
+      )}
+    </Card>
+  );
+}
+
+export function BankSummaryPanel({
+  shgId,
+  leaderId,
+}: {
+  shgId: string;
+  leaderId: string;
+}) {
+  const [summary, setSummary] = useState<{
+    completed_orders: number;
+    total_orders: number;
+    group_quality_score_pct: number;
+    total_group_disbursed_inr: number;
+    required_member_count?: number;
+    consented_member_count?: number;
+    privacy_guarantee: string;
+  } | null>(null);
+  const [sharedStatus, setSharedStatus] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function loadSummary() {
+    setErr(null);
+    try {
+      const res = await apiFetch<NonNullable<typeof summary>>(`/api/leader/shgs/${shgId}/bank-summary`);
+      setSummary(res);
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "Failed to load bank summary");
+    }
+  }
+
+  async function grantAndShare() {
+    setBusy(true);
+    setErr(null);
+    setSharedStatus(null);
+    try {
+      const consent = await apiFetch<{ consent_event_id: string }>(`/api/leader/shgs/${shgId}/consent`, {
+        method: "POST",
+        body: JSON.stringify({
+          granted_by_member_id: leaderId,
+          recipient_type: "BANK",
+          recipient_id: "SBI",
+          purpose: "Group creditworthiness summary share",
+          group_committee_approved: true,
+        }),
+      });
+      const shared = await apiFetch<{ consented_member_count?: number; shared_with?: string }>(
+        `/api/leader/shgs/${shgId}/bank-summary/share?consent_event_id=${consent.consent_event_id}`,
+        { method: "POST" },
+      );
+      setSharedStatus(
+        `Shared with ${shared.shared_with || "BANK"} (${shared.consented_member_count ?? 0} per-member ConsentEvents verified).`,
+      );
+      await loadSummary();
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "Failed to share bank summary");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card className="space-y-3">
+      <CardHeader>
+        <CardTitle>Bank-Ready Creditworthiness Summary</CardTitle>
+        <div className="flex gap-2">
+          <Button onClick={loadSummary}>Preview Summary</Button>
+          {summary && (
+            <Button variant="approvalGate" disabled={busy} onClick={grantAndShare}>
+              {busy ? "Sharing..." : "Record Per-Member Consent & Share"}
+            </Button>
+          )}
+        </div>
+      </CardHeader>
+      {err && <div className="error-box" role="alert">{err}</div>}
+      {sharedStatus && (
+        <div className="rounded border border-[var(--status-success)] bg-[var(--status-success-bg)] px-3 py-2 type-scale-xs text-[var(--status-success)]">
+          {sharedStatus}
+        </div>
+      )}
+      {summary ? (
+        <div className="space-y-2 type-scale-sm">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="rounded border border-[var(--border-neutral)] p-2.5">
+              <div className="type-scale-xs text-[var(--text-secondary)]">Completed / Total orders</div>
+              <strong>{summary.completed_orders} / {summary.total_orders}</strong>
+            </div>
+            <div className="rounded border border-[var(--border-neutral)] p-2.5">
+              <div className="type-scale-xs text-[var(--text-secondary)]">Group quality score</div>
+              <strong>{summary.group_quality_score_pct}%</strong>
+            </div>
+            <div className="rounded border border-[var(--border-neutral)] p-2.5">
+              <div className="type-scale-xs text-[var(--text-secondary)]">Group disbursed</div>
+              <strong>₹{summary.total_group_disbursed_inr.toLocaleString("en-IN")}</strong>
+            </div>
+          </div>
+          <div className="type-scale-xs text-[var(--text-secondary)]">
+            Per-member consent: {summary.consented_member_count ?? 0} / {summary.required_member_count ?? 0} contributing members consented · {summary.privacy_guarantee}
+          </div>
+        </div>
+      ) : (
+        <p className="quiet">Preview group creditworthiness history and record per-member consent before sharing with a bank.</p>
       )}
     </Card>
   );

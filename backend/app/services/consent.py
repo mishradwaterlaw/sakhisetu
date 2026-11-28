@@ -162,6 +162,20 @@ def generate_bank_creditworthiness_summary(
     total_qc_units = sum(q.units_checked for q in qc_rows)
     group_quality_score_pct = round((passed_units / total_qc_units) * 100.0, 1) if total_qc_units > 0 else 100.0
 
+    consented_rows = db.scalars(
+        select(ConsentEvent).where(
+            ConsentEvent.shg_id == shg_id,
+            ConsentEvent.recipient_type.in_(["BANK", "FEDERATION"]),
+            ConsentEvent.consented.is_(True),
+        )
+    ).all()
+    required_members = _contributing_member_ids_for_shg(db, shg_id, months=months)
+    consented_ids = {
+        c.granted_by_member_id
+        for c in consented_rows
+        if c.scope.get("group_committee_approved") is True and c.granted_by_member_id in required_members
+    }
+
     return {
         "shg_id": shg.id,
         "shg_name": shg.name,
@@ -173,6 +187,8 @@ def generate_bank_creditworthiness_summary(
         "total_payout_batches": len(batches),
         "disbursed_payout_batches": len(disbursed_batches),
         "total_group_disbursed_inr": round(sum(b.total_amount_inr for b in disbursed_batches), 2),
+        "required_member_count": len(required_members),
+        "consented_member_count": len(consented_ids),
         "privacy_guarantee": "Group-level aggregates only; zero individual member identities or payouts included.",
     }
 

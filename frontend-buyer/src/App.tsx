@@ -24,6 +24,15 @@ interface BuyerOrderSummary {
   completed_tasks: number;
   group_qc_passed_units: number;
   group_qc_flagged_units: number;
+  pricing_breakdown?: {
+    material_cost_inr: number;
+    labour_cost_inr: number;
+    overhead_inr: number;
+    margin_inr: number;
+    minimum_viable_price_per_unit_inr: number;
+    buyer_offer_per_unit_inr: number | null;
+    recommendation: string;
+  } | null;
 }
 async function read<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(path, options);
@@ -34,6 +43,9 @@ async function read<T>(path: string, options?: RequestInit): Promise<T> {
 }
 export default function App() {
   const [orders, setOrders] = useState<BuyerOrderSummary[]>([]);
+  const [buyerPartyId, setBuyerPartyId] = useState("");
+  const [revisedOffers, setRevisedOffers] = useState<Record<string, string>>({});
+  const [offerMsg, setOfferMsg] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [revision, setRevision] = useState(0);
@@ -43,11 +55,12 @@ export default function App() {
     setLoading(true);
     setError("");
     read<{ buyer_party_id: string }>("/api/bootstrap", { method: "POST" })
-      .then((boot) =>
-        read<{ orders: BuyerOrderSummary[] }>("/api/buyer/orders", {
+      .then((boot) => {
+        if (active) setBuyerPartyId(boot.buyer_party_id);
+        return read<{ orders: BuyerOrderSummary[] }>("/api/buyer/orders", {
           headers: { "X-Buyer-Party-Id": boot.buyer_party_id },
-        }),
-      )
+        });
+      })
       .then((data) => {
         if (active) setOrders(data.orders);
       })
@@ -223,6 +236,54 @@ export default function App() {
                         </span>
                       )}
                     </div>
+                    {o.pricing_breakdown && o.pricing_breakdown.recommendation !== "INSUFFICIENT_DATA" && (
+                      <div style={{ marginTop: "0.75rem", padding: "0.65rem 0.85rem", borderRadius: "8px", background: "#f8fafc", border: "1px solid #e2e8f0", fontSize: "0.82rem" }}>
+                        <strong>Transparent Cost Breakdown (MVP ₹{o.pricing_breakdown.minimum_viable_price_per_unit_inr}/unit):</strong>{" "}
+                        Material ₹{o.pricing_breakdown.material_cost_inr} · Labour ₹{o.pricing_breakdown.labour_cost_inr} · Overhead ₹{o.pricing_breakdown.overhead_inr} · SHG Margin ₹{o.pricing_breakdown.margin_inr}
+                      </div>
+                    )}
+                    {(o.status === "COUNTER_OFFER_SENT" || o.status === "NEGOTIATING") && (
+                      <form
+                        style={{ marginTop: "0.75rem", display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}
+                        onSubmit={async (e) => {
+                          e.preventDefault();
+                          const priceVal = Number(revisedOffers[o.order_id]);
+                          if (!Number.isFinite(priceVal) || priceVal <= 0) return;
+                          try {
+                            await read(`/api/buyer/orders/${o.order_id}/revised-offer`, {
+                              method: "POST",
+                              headers: {
+                                "Content-Type": "application/json",
+                                "X-Buyer-Party-Id": buyerPartyId,
+                              },
+                              body: JSON.stringify({ offered_price_per_unit_inr: priceVal }),
+                            });
+                            setOfferMsg((prev) => ({ ...prev, [o.order_id]: "Revised offer submitted." }));
+                            setRevision((v) => v + 1);
+                          } catch (err: unknown) {
+                            setOfferMsg((prev) => ({
+                              ...prev,
+                              [o.order_id]: err instanceof Error ? err.message : "Failed to submit offer.",
+                            }));
+                          }
+                        }}
+                      >
+                        <input
+                          type="number"
+                          min={1}
+                          step="0.5"
+                          placeholder="Revised offer (₹/unit)"
+                          aria-label={`Revised offer for ${o.order_code}`}
+                          value={revisedOffers[o.order_id] ?? ""}
+                          onChange={(e) => setRevisedOffers((prev) => ({ ...prev, [o.order_id]: e.target.value }))}
+                          style={{ padding: "0.4rem 0.6rem", border: "1px solid #cbd5e1", borderRadius: "6px", width: "165px" }}
+                        />
+                        <button type="submit" style={{ padding: "0.4rem 0.85rem", borderRadius: "6px", background: "#7c2d48", color: "#fff", border: "none", fontWeight: 600, cursor: "pointer" }}>
+                          Submit revised offer
+                        </button>
+                        {offerMsg[o.order_id] && <span style={{ fontSize: "0.82rem" }}>{offerMsg[o.order_id]}</span>}
+                      </form>
+                    )}
                   </article>
                 );
               })
