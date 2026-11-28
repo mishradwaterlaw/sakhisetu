@@ -1,5 +1,6 @@
 """India-focused WhatsApp BSP adapter (Gupshup / Karix) + sandbox mode."""
 
+import base64
 import httpx
 from app.adapters.channels.base import NormalizedInbound, OutboundChoicePrompt, render_prompt_for_channel
 from app.config import get_settings
@@ -7,6 +8,8 @@ from app.config import get_settings
 
 def parse_whatsapp_webhook(payload: dict) -> NormalizedInbound:
     """Normalize Gupshup/Karix/sandbox webhook JSON into NormalizedInbound."""
+    audio_b64 = payload.get("audio_base64")
+    audio_bytes = base64.b64decode(audio_b64) if audio_b64 else None
     # Support both Gupshup v2 format and simplified sandbox payload
     if "payload" in payload and isinstance(payload["payload"], dict):
         inner = payload["payload"]
@@ -20,6 +23,7 @@ def parse_whatsapp_webhook(payload: dict) -> NormalizedInbound:
             provider_message_id=inner.get("id") or payload.get("message_id"),
             sender_phone=sender,
             raw_text=text,
+            audio_bytes=audio_bytes,
             button_payload_id=btn_id,
             raw_payload=inner,
         )
@@ -29,6 +33,7 @@ def parse_whatsapp_webhook(payload: dict) -> NormalizedInbound:
         provider_message_id=payload.get("message_id"),
         sender_phone=payload.get("sender_phone"),
         raw_text=payload.get("text"),
+        audio_bytes=audio_bytes,
         button_payload_id=payload.get("button_id"),
         raw_payload=payload,
     )

@@ -27,11 +27,13 @@ export function OrderReview({
   order,
   leaderId,
   materials,
+  members = [],
   onChange,
 }: {
   order: Order;
   leaderId: string;
   materials: DashboardData["materials"];
+  members?: DashboardData["members"];
   onChange: (message?: string) => void;
 }) {
   const [orderDetail, setDetail] = useState<OrderDetail | null>(null);
@@ -42,6 +44,12 @@ export function OrderReview({
   const [agreedPrice, setAgreedPrice] = useState(
     order.agreed_price_per_unit_inr ?? order.offered_price_per_unit_inr ?? 0,
   );
+  const [revisedBuyerOffer, setRevisedBuyerOffer] = useState(
+    order.offered_price_per_unit_inr ?? 0,
+  );
+  const [overrides, setOverrides] = useState<
+    Record<string, { new_member_id: string; reason: string }>
+  >({});
   useEffect(() => {
     let active = true;
     apiFetch<OrderDetail>(`/api/leader/orders/${order.id}`)
@@ -249,6 +257,38 @@ export function OrderReview({
                     </Dialog>
                   </>
                 )}
+                {(orderDetail.order.status === "COUNTER_OFFER_SENT" ||
+                  orderDetail.order.status === "NEGOTIATING") && (
+                  <div className="flex flex-wrap items-end gap-2">
+                    <label className="field">
+                      Buyer revised offer (₹/unit)
+                      <input
+                        type="number"
+                        min={1}
+                        step="1"
+                        value={revisedBuyerOffer || ""}
+                        onChange={(e) => setRevisedBuyerOffer(Number(e.target.value))}
+                      />
+                    </label>
+                    <Button
+                      variant="primary"
+                      disabled={!Number.isFinite(revisedBuyerOffer) || revisedBuyerOffer <= 0}
+                      onClick={() =>
+                        runAction(async () => {
+                          await apiFetch(`/api/leader/orders/${order.id}/buyer-revised-offer`, {
+                            method: "POST",
+                            body: JSON.stringify({
+                              offered_price_per_unit_inr: revisedBuyerOffer,
+                            }),
+                          });
+                          setAgreedPrice(revisedBuyerOffer);
+                        }, "Buyer revised offer recorded. Ready to review price again.")
+                      }
+                    >
+                      Record buyer revised offer
+                    </Button>
+                  </div>
+                )}
                 {orderDetail.order.status === "PRICING_APPROVED" && (
                   <Button
                     variant="approvalGate"
@@ -266,9 +306,26 @@ export function OrderReview({
                     variant="approvalGate"
                     onClick={() =>
                       runAction(async () => {
+                        const overridesPayload = Object.entries(overrides)
+                          .map(([assignment_id, ov]) => {
+                            const orig = orderDetail.assignments.find((x) => x.id === assignment_id);
+                            const origMemberId =
+                              orig?.member_id ||
+                              members.find((m) => m.name === orig?.member_name)?.id ||
+                              "";
+                            if (!orig || !ov.new_member_id || ov.new_member_id === origMemberId) {
+                              return null;
+                            }
+                            return {
+                              assignment_id,
+                              new_member_id: ov.new_member_id,
+                              reason: ov.reason.trim() || "Leader workload override",
+                            };
+                          })
+                          .filter(Boolean);
                         await apiFetch(`/api/leader/orders/${orderDetail.order.id}/approve-allocation`, {
                           method: "POST",
-                          body: JSON.stringify({ leader_id: leaderId, overrides: [] }),
+                          body: JSON.stringify({ leader_id: leaderId, overrides: overridesPayload }),
                         });
                       }, "Allocation approved.")
                     }
@@ -325,21 +382,81 @@ export function OrderReview({
           {orderDetail.assignments.length > 0 && (
             <div className="space-y-1.5">
               <div className="type-scale-xs uppercase text-[var(--text-secondary)]">Work allocation</div>
-              {orderDetail.assignments.map((a) => (
-                <div
-                  key={a.id}
-                  className="rounded border border-[var(--border-neutral)] bg-[var(--bg-surface-muted)] p-2.5 type-scale-xs"
-                >
-                  <div className="font-bold">
-                    {a.member_name} — {a.assigned_units}u ({a.estimated_minutes}m)
+              {orderDetail.assignments.map((a) => {
+                const origMemberId =
+                  a.member_id || members.find((m) => m.name === a.member_name)?.id || "";
+                const currentOv = overrides[a.id] ?? { new_member_id: origMemberId, reason: "" };
+                const isOverridden =
+                  orderDetail.order.status === "ALLOCATION_PROPOSED" &&
+                  currentOv.new_member_id &&
+                  currentOv.new_member_id !== origMemberId;
+                return (
+                  <div
+                    key={a.id}
+                    className="rounded border border-[var(--border-neutral)] bg-[var(--bg-surface-muted)] p-2.5 type-scale-xs space-y-1.5"
+                  >
+                    <div className="font-bold">
+                      {a.member_name} — {a.assigned_units}u ({a.estimated_minutes}m)
+                    </div>
+                    <div className="text-[var(--text-secondary)] mt-0.5">{a.solver_explanation}</div>
+                    {orderDetail.order.status === "ALLOCATION_PROPOSED" && members.length > 0 && (
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        <label className="flex items-center gap-1.5">
+                          <span>Reassign to:</span>
+                          <select
+                            aria-label={`Override member for ${a.member_name}`}
+                            value={currentOv.new_member_id}
+                            onChange={(e) =>
+                              setOverrides((prev) => ({
+                                ...prev,
+                                [a.id]: {
+                                  new_member_id: e.target.value,
+                                  reason: prev[a.id]?.reason ?? "",
+                                },
+                              }))
+                            }
+                            className="rounded border border-[var(--border-neutral)] bg-[var(--bg-surface)] px-2 py-1"
+                          >
+                            {members.map((m) => (
+                              <option key={m.id} value={m.id}>
+                                {m.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        {isOverridden && (
+                          <input
+                            type="text"
+                            placeholder="Reason for override"
+                            aria-label={`Override reason for ${a.member_name}`}
+                            value={currentOv.reason}
+                            onChange={(e) =>
+                              setOverrides((prev) => ({
+                                ...prev,
+                                [a.id]: {
+                                  new_member_id: currentOv.new_member_id,
+                                  reason: e.target.value,
+                                },
+                              }))
+                            }
+                            className="flex-1 min-w-[160px] rounded border border-[var(--border-neutral)] bg-[var(--bg-surface)] px-2 py-1"
+                          />
+                        )}
+                      </div>
+                    )}
                   </div>
-                  <div className="text-[var(--text-secondary)] mt-0.5">{a.solver_explanation}</div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
-          <SupplierAndCounterOfferPanel orderId={orderDetail.order.id} materials={materials} />
+          <SupplierAndCounterOfferPanel
+            orderId={orderDetail.order.id}
+            leaderId={leaderId}
+            orderStatus={orderDetail.order.status}
+            materials={materials}
+            onCounterOfferSent={() => refresh("Counter-offer sent to buyer.")}
+          />
 
           {orderDetail.assignments.length > 0 && (
             <SideBySideQCQueue

@@ -100,6 +100,7 @@ class ApproveRecoveryIn(BaseModel):
 
 class CommitteeApproveIn(BaseModel):
     reviewer_member_id: str
+    decision: str = "APPROVED"
     contest_window_hours: int = 24
     reason: str | None = None
 
@@ -611,10 +612,28 @@ def approve_allocation(order_id: str, body: ApproveAllocationIn, db: Session = D
 
     for ov in body.overrides:
         ta = db.get(TaskAssignment, ov["assignment_id"])
-        if ta and ta.order_id == order_id:
-            ta.member_id = ov["new_member_id"]
-            ta.is_leader_override = True
-            ta.override_reason = ov.get("reason", "Leader override")
+        if ta and ta.order_id == order_id and ta.status != "OVERRIDDEN":
+            override_reason = ov.get("reason", "Leader override")
+            ta.status = "OVERRIDDEN"
+            db.add(
+                TaskAssignment(
+                    order_id=ta.order_id,
+                    task_id=ta.task_id,
+                    member_id=ov["new_member_id"],
+                    assigned_units=ta.assigned_units,
+                    completed_units=0,
+                    passed_units=0,
+                    estimated_minutes=ta.estimated_minutes,
+                    solver_explanation=f"Leader override replacing assignment {ta.id}: {override_reason}",
+                    solver_metadata={
+                        "overridden_assignment_id": ta.id,
+                        "previous_member_id": ta.member_id,
+                    },
+                    is_leader_override=True,
+                    override_reason=override_reason,
+                    status="APPROVED",
+                )
+            )
 
     try:
         approval = record_approval_and_transition(
@@ -631,7 +650,8 @@ def approve_allocation(order_id: str, body: ApproveAllocationIn, db: Session = D
         )
         assignments = db.scalars(select(TaskAssignment).where(TaskAssignment.order_id == order_id)).all()
         for a in assignments:
-            a.status = "APPROVED"
+            if a.status == "PROPOSED":
+                a.status = "APPROVED"
         db.commit()
         return {"order_id": order.id, "status": order.status, "approval_id": approval.id}
     except StateTransitionError as exc:
@@ -655,18 +675,23 @@ def update_rubric(order_id: str, body: RubricIn, db: Session = Depends(get_db)):
 
 @router.post("/orders/{order_id}/qc")
 def record_qc(order_id: str, body: QCRecordIn, db: Session = Depends(get_db)):
-    qc = record_human_qc_decision(
-        db,
-        order_id=order_id,
-        assignment_id=body.assignment_id,
-        submitted_media_id=body.submitted_media_id,
-        reviewer_member_id=body.reviewer_member_id,
-        units_checked=body.units_checked,
-        outcome=body.outcome,
-        flag_reason=body.flag_reason,
-    )
-    db.commit()
-    return {"qc_check_id": qc.id, "outcome": qc.outcome, "rotation_id": qc.rotation_id}
+    try:
+        qc = record_human_qc_decision(
+            db,
+            order_id=order_id,
+            assignment_id=body.assignment_id,
+            submitted_media_id=body.submitted_media_id,
+            reviewer_member_id=body.reviewer_member_id,
+            units_checked=body.units_checked,
+            outcome=body.outcome,
+            flag_reason=body.flag_reason,
+        )
+        db.commit()
+        return {"qc_check_id": qc.id, "outcome": qc.outcome, "rotation_id": qc.rotation_id}
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post("/orders/{order_id}/blockers")
@@ -732,8 +757,60 @@ def approve_recovery(blocker_id: str, body: ApproveRecoveryIn, db: Session = Dep
         actor_id=body.leader_id,
         reason=body.reason or f"Selected {opt.option_type}",
     )
+
+    created_assignment_ids: list[str] = []
+    if opt.option_type == "REASSIGN_UNITS" and blocker.remaining_units > 0:
+        orig = db.get(TaskAssignment, blocker.assignment_id) if blocker.assignment_id else None
+        task = db.get(Task, orig.task_id) if orig else db.scalar(select(Task).where(Task.order_id == order.id))
+        if orig:
+            orig.status = "REASSIGNED"
+
+        excluded = {blocker.reported_by_member_id}
+        if orig:
+            excluded.add(orig.member_id)
+
+        candidates = db.scalars(
+            select(Member).where(Member.shg_id == order.shg_id, Member.is_active.is_(True))
+        ).all()
+        eligible = [m for m in candidates if m.id not in excluded]
+        if task:
+            skilled = [m for m in eligible if task.required_skill in (m.skills or [])]
+            if skilled:
+                eligible = skilled
+
+        if eligible and task:
+            target_member = eligible[0]
+            new_ta = TaskAssignment(
+                order_id=order.id,
+                task_id=task.id,
+                member_id=target_member.id,
+                assigned_units=blocker.remaining_units,
+                completed_units=0,
+                passed_units=0,
+                estimated_minutes=round(blocker.remaining_units * task.minutes_per_unit, 2),
+                solver_explanation=(
+                    f"Recovery reassignment from blocker {blocker.id}"
+                    + (f" (replaced assignment {orig.id})" if orig else "")
+                ),
+                solver_metadata={
+                    "blocker_id": blocker.id,
+                    "replaced_assignment_id": orig.id if orig else None,
+                    "recovery_option_id": opt.id,
+                },
+                is_leader_override=False,
+                status="APPROVED",
+            )
+            db.add(new_ta)
+            db.flush()
+            created_assignment_ids.append(new_ta.id)
+
     db.commit()
-    return {"blocker_id": blocker.id, "status": blocker.status, "approval_id": approval.id}
+    return {
+        "blocker_id": blocker.id,
+        "status": blocker.status,
+        "approval_id": approval.id,
+        "created_assignment_ids": created_assignment_ids,
+    }
 
 
 @router.post("/orders/{order_id}/payouts/initiate")
@@ -756,17 +833,22 @@ def initiate_payout(order_id: str, db: Session = Depends(get_db)):
 @router.post("/payouts/{batch_id}/committee-approve")
 def committee_approve_payout(batch_id: str, body: CommitteeApproveIn, db: Session = Depends(get_db)):
     try:
-        batch = approve_payout_by_committee(
+        res = approve_payout_by_committee(
             db,
             batch_id=batch_id,
             reviewer_member_id=body.reviewer_member_id,
+            decision=body.decision,
             contest_window_hours=body.contest_window_hours,
             reason=body.reason,
         )
+        batch = res["batch"]
         db.commit()
         return {
             "batch_id": batch.id,
             "status": batch.status,
+            "required_quorum": res["required_quorum"],
+            "approved_member_ids": res["approved_member_ids"],
+            "pending_member_ids": res["pending_member_ids"],
             "contest_window_ends_at": batch.contest_window_ends_at.isoformat() if batch.contest_window_ends_at else None,
         }
     except PermissionError as exc:
@@ -912,6 +994,83 @@ def get_buyer_counter_offer_draft(order_id: str, db: Session = Depends(get_db)):
         quantity=order.quantity,
         leader_language=shg.primary_language if shg else "en",
     )
+
+
+class SendCounterOfferIn(BaseModel):
+    leader_id: str
+    message: str
+    counter_price_per_unit_inr: float | None = None
+
+
+@router.post("/orders/{order_id}/send-counter-offer")
+def send_counter_offer(order_id: str, body: SendCounterOfferIn, db: Session = Depends(get_db)):
+    """Explicit leader gate to send a counter-offer and enter COUNTER_OFFER_SENT for negotiation."""
+    from app.models.governance import CommsLog
+
+    order = db.get(Order, order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    try:
+        approval = record_approval_and_transition(
+            db,
+            shg_id=order.shg_id,
+            entity_obj=order,
+            entity_type="order",
+            entity_id=order.id,
+            current_state=order.status,
+            target_state="COUNTER_OFFER_SENT",
+            actor_type="LEADER",
+            actor_id=body.leader_id,
+            reason=body.message[:200],
+            evidence={"counter_price_per_unit_inr": body.counter_price_per_unit_inr},
+        )
+        db.add(
+            CommsLog(
+                shg_id=order.shg_id,
+                recipient_party_id=order.buyer_party_id,
+                channel="whatsapp_smartphone",
+                language="en",
+                message_category="COUNTER_OFFER",
+                fact_text=body.message,
+                action_text="Reply with a revised unit price to continue price review.",
+                request_text="Send your revised offer when ready.",
+                is_replayable=True,
+            )
+        )
+        db.commit()
+        return {"order_id": order.id, "status": order.status, "approval_id": approval.id}
+    except StateTransitionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+class BuyerRevisedOfferIn(BaseModel):
+    offered_price_per_unit_inr: float
+    note: str | None = None
+
+
+@router.post("/orders/{order_id}/buyer-revised-offer")
+def record_buyer_revised_offer(order_id: str, body: BuyerRevisedOfferIn, db: Session = Depends(get_db)):
+    """Receive a buyer's revised offer and loop the order back to CONFIRMED for leader price re-review."""
+    from app.services.state_machine import get_transition_spec
+
+    order = db.get(Order, order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if body.offered_price_per_unit_inr <= 0:
+        raise HTTPException(status_code=400, detail="offered_price_per_unit_inr must be positive")
+    try:
+        get_transition_spec("order", order.status, "CONFIRMED")
+    except StateTransitionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    order.offered_price_per_unit_inr = body.offered_price_per_unit_inr
+    order.status = "CONFIRMED"
+    db.commit()
+    return {
+        "order_id": order.id,
+        "status": order.status,
+        "offered_price_per_unit_inr": order.offered_price_per_unit_inr,
+    }
 
 
 class SupplierQuoteIn(BaseModel):

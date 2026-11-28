@@ -18,6 +18,7 @@ class WhatsAppWebhookIn(BaseModel):
     shg_id: str
     sender_phone: str | None = None
     text: str | None = None
+    audio_base64: str | None = None
     button_id: str | None = None
     message_id: str | None = None
     payload: dict | None = None

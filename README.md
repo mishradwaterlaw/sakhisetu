@@ -87,6 +87,7 @@ Once an order is confirmed and priced, a stateless CP-SAT solver assigns tasks (
 - **Fairness and soft workload preferences**: Minimizes peak utilization across the group. Members can optionally set a workload preference (`standard`, `more`, or `less`), which acts strictly as a soft constraint after hard constraints are satisfied.
 - **Anti-favoritism guardrail**: If a member absorbs the maximum share in consecutive cycles, the solver surfaces a visible fairness warning to the leader.
 - **Solver-grounded explanations**: Every assignment reason is generated directly from solver utilization, slack minutes, and counterfactual ineligibility checks. If a member stated `more` or `less` and received zero units (for example due to a missing skill or tool), the planner emits a zero-unit explanation record stating her preference was recorded and citing the exact disqualifying constraint.
+- **Current scope**: Per-SHG task allocation is the current design; cross-SHG task splitting (distinct from pooled material buying) is a stated future direction.
 
 ### 3. Pricing, Supplier Comparison, and Counter-Offer Drafting
 - **Minimum Viable Price**: Computes material cost, labour (from task minutes and wage benchmarks), overhead, and target margin alongside the buyer's offer. Any non-live parameter (such as market trend adjustment) is explicitly labeled as a configured placeholder assumption.

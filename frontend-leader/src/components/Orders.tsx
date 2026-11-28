@@ -207,6 +207,7 @@ export function Orders({
             order={selected}
             leaderId={leaderId}
             materials={dash.materials}
+            members={dash.members}
             onChange={onChange}
           />
         )}

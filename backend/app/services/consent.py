@@ -2,6 +2,8 @@
 
 import csv
 import io
+import uuid
+from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -14,6 +16,26 @@ class ConsentRequiredError(PermissionError):
     """Raised when attempting to export or share group/member data without a persisted ConsentEvent."""
 
 
+def _contributing_member_ids_for_shg(db: Session, shg_id: str, months: int = 6) -> list[str]:
+    """Return distinct member IDs whose contribution/payout data feeds the SHG's bank summary."""
+    cutoff = datetime.now(timezone.utc) - timedelta(days=30 * months)
+    batches = db.scalars(
+        select(PayoutBatch).where(PayoutBatch.shg_id == shg_id, PayoutBatch.created_at >= cutoff)
+    ).all()
+    seen: list[str] = []
+    for b in batches:
+        for item in b.breakdown_snapshot or []:
+            mid = item.get("member_id")
+            if mid and mid not in seen:
+                seen.append(mid)
+    if not seen:
+        members = db.scalars(
+            select(Member).where(Member.shg_id == shg_id, Member.is_active.is_(True))
+        ).all()
+        seen = [m.id for m in members]
+    return seen
+
+
 def grant_consent(
     db: Session,
     *,
@@ -23,19 +45,42 @@ def grant_consent(
     recipient_id: str | None,
     purpose: str,
     scope: dict,
+    member_ids: list[str] | None = None,
 ) -> ConsentEvent:
-    event = ConsentEvent(
-        shg_id=shg_id,
-        granted_by_member_id=granted_by_member_id,
-        recipient_type=recipient_type,
-        recipient_id=recipient_id,
-        purpose=purpose,
-        scope=scope,
-        consented=True,
-    )
-    db.add(event)
+    """Record individual ConsentEvent row(s).
+
+    When `member_ids` is provided, or when `scope.get("group_committee_approved")` is True
+    for BANK/FEDERATION sharing, writes one ConsentEvent row per contributing member
+    (never a single blanket row for the whole group).
+    """
+    target_member_ids: list[str]
+    if member_ids is not None:
+        target_member_ids = list(dict.fromkeys(member_ids))
+    elif scope.get("group_committee_approved") and recipient_type in ("BANK", "FEDERATION"):
+        target_member_ids = _contributing_member_ids_for_shg(db, shg_id)
+    else:
+        target_member_ids = [granted_by_member_id]
+
+    if not target_member_ids:
+        target_member_ids = [granted_by_member_id]
+
+    consent_group_id = scope.get("consent_group_id") or f"cg_{uuid.uuid4().hex[:12]}"
+    created: list[ConsentEvent] = []
+    for mid in target_member_ids:
+        row_scope = {**scope, "consent_group_id": consent_group_id, "member_id": mid}
+        ev = ConsentEvent(
+            shg_id=shg_id,
+            granted_by_member_id=mid,
+            recipient_type=recipient_type,
+            recipient_id=recipient_id,
+            purpose=purpose,
+            scope=row_scope,
+            consented=True,
+        )
+        db.add(ev)
+        created.append(ev)
     db.flush()
-    return event
+    return created[0]
 
 
 def export_bank_payout_csv(
@@ -139,9 +184,9 @@ def share_bank_summary_with_group_consent(
     consent_event_id: str | None,
     months: int = 6,
 ) -> dict:
-    """External sharing of bank-ready file requires group-approved ConsentEvent (§16)."""
+    """External sharing of bank-ready file requires per-member ConsentEvents for all contributing members (§16)."""
     if not consent_event_id:
-        raise ConsentRequiredError("External bank sharing requires a group-level ConsentEvent (§16)")
+        raise ConsentRequiredError("External bank sharing requires per-member ConsentEvents (§16)")
 
     consent = db.scalar(
         select(ConsentEvent).where(
@@ -156,7 +201,27 @@ def share_bank_summary_with_group_consent(
             "ConsentEvent must carry group_committee_approved=True (leader cannot consent unilaterally)"
         )
 
+    required_members = _contributing_member_ids_for_shg(db, shg_id, months=months)
+    all_consents = db.scalars(
+        select(ConsentEvent).where(
+            ConsentEvent.shg_id == shg_id,
+            ConsentEvent.recipient_type == consent.recipient_type,
+            ConsentEvent.consented.is_(True),
+        )
+    ).all()
+    consented_member_ids = {
+        c.granted_by_member_id
+        for c in all_consents
+        if c.scope.get("group_committee_approved") is True
+    }
+    missing = [mid for mid in required_members if mid not in consented_member_ids]
+    if missing:
+        raise ConsentRequiredError(
+            f"Missing individual ConsentEvent for {len(missing)} contributing member(s) before sharing bank file"
+        )
+
     summary = generate_bank_creditworthiness_summary(db, shg_id=shg_id, months=months)
     summary["consent_event_id"] = consent.id
+    summary["consented_member_count"] = len(required_members)
     summary["shared_with"] = consent.recipient_type
     return summary

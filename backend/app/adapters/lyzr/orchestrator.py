@@ -18,6 +18,8 @@ from app.adapters.channels.base import (
     OutboundChoicePrompt,
     render_prompt_for_channel,
 )
+from app.adapters.lyzr.client import ExtractedOrderSchema, RouteIntentSchema, call_lyzr_agent
+from app.adapters.speech.bhashini import transcribe_audio_sync
 from app.config import get_settings
 from app.models.catalogue import Product, TaskTemplate, TemplateRequirement, Tool
 from app.models.governance import AgentEvent, CommsLog
@@ -78,15 +80,75 @@ def _find_span(text: str, pattern: str) -> str | None:
     return m.group(0) if m else None
 
 
-def _extract_order_fields_structured(db: Session, text: str) -> dict:
+def _extract_order_fields_structured(
+    db: Session,
+    text: str,
+    *,
+    shg_id: str,
+    session_id: str,
+) -> dict:
     """Extract structured order fields with value, confidence, and exact source_span (§4.5).
-    Uses Lyzr Agent ADK when configured; deterministic regex/catalogue matcher in local/offline mode.
+    Calls Lyzr Agent API against ExtractedOrderSchema when LYZR_API_KEY + LYZR_EXTRACTOR_AGENT_ID
+    are configured; otherwise runs honest local deterministic fallback with 0 LLM tokens.
     """
     settings = get_settings()
-    used_lyzr = bool(settings.lyzr_api_key)
-
-    # Match product from catalogue
     products = db.scalars(select(Product).where(Product.is_active.is_(True))).all()
+
+    if settings.lyzr_api_key and settings.lyzr_extractor_agent_id:
+        catalogue_names = ", ".join(p.name for p in products)
+        prompt = (
+            f"Extract order fields as JSON matching ExtractedOrderSchema "
+            f"(keys: product, quantity, offered_price, due_date; each with value, confidence, source_span). "
+            f"Known products: [{catalogue_names}]. Input: {text}"
+        )
+        res = call_lyzr_agent(
+            agent_id=settings.lyzr_extractor_agent_id,
+            user_id=shg_id,
+            session_id=session_id,
+            message=prompt,
+        )
+        parsed = ExtractedOrderSchema.model_validate_json(res.raw_response)
+        matched_product = next(
+            (p for p in products if str(parsed.product.value or "").lower() in (p.name.lower(), p.sku.lower())),
+            None,
+        )
+        due_dt = None
+        if parsed.due_date.value:
+            try:
+                due_dt = datetime.fromisoformat(str(parsed.due_date.value)).replace(tzinfo=timezone.utc)
+            except ValueError:
+                due_dt = None
+        return {
+            "engine": "lyzr_adk",
+            "trace_id": res.trace_id,
+            "tokens": res.total_tokens,
+            "fields": {
+                "product": {
+                    "value": matched_product.id if matched_product else None,
+                    "display": matched_product.name if matched_product else parsed.product.value,
+                    "confidence": parsed.product.confidence,
+                    "source_span": parsed.product.source_span,
+                },
+                "quantity": {
+                    "value": int(parsed.quantity.value) if parsed.quantity.value is not None else None,
+                    "confidence": parsed.quantity.confidence,
+                    "source_span": parsed.quantity.source_span,
+                },
+                "offered_price": {
+                    "value": float(parsed.offered_price.value) if parsed.offered_price.value is not None else None,
+                    "confidence": parsed.offered_price.confidence,
+                    "source_span": parsed.offered_price.source_span,
+                },
+                "due_date": {
+                    "value": due_dt.isoformat() if due_dt else None,
+                    "dt": due_dt,
+                    "confidence": parsed.due_date.confidence,
+                    "source_span": parsed.due_date.source_span,
+                },
+            },
+        }
+
+    # Local deterministic fallback (honestly metered as 0 LLM tokens)
     matched_product: Product | None = None
     product_span: str | None = None
     for p in products:
@@ -100,17 +162,14 @@ def _extract_order_fields_structured(db: Session, text: str) -> dict:
         if matched_product:
             break
 
-    # Quantity
     qty_match = re.search(r"\b(\d{1,5})\s*(?:pcs|pieces|units|bags|kurtas|items)?\b", text, re.IGNORECASE)
     qty_val = int(qty_match.group(1)) if qty_match else None
     qty_span = qty_match.group(0) if qty_match else None
 
-    # Price (Rs / INR / ₹)
     price_match = re.search(r"(?:₹|rs\.?|inr)\s*(\d+(?:\.\d{1,2})?)", text, re.IGNORECASE)
     price_val = float(price_match.group(1)) if price_match else None
     price_span = price_match.group(0) if price_match else None
 
-    # Due date (e.g. "in 10 days" or YYYY-MM-DD)
     due_val: datetime | None = None
     due_span: str | None = None
     iso_match = re.search(r"\b(20\d{2}-\d{2}-\d{2})\b", text)
@@ -123,7 +182,9 @@ def _extract_order_fields_structured(db: Session, text: str) -> dict:
         due_span = days_match.group(0)
 
     return {
-        "engine": "lyzr_adk" if used_lyzr else "lyzr_local_structured",
+        "engine": "local_deterministic_fallback",
+        "trace_id": None,
+        "tokens": 0,
         "fields": {
             "product": {
                 "value": matched_product.id if matched_product else None,
@@ -172,7 +233,7 @@ def _run_intake(
     db: Session, *, shg_id: str, inbound: NormalizedInbound, buyer_party_id_hint: str | None, outgoing: list[CommsLog],
 ) -> IntakeOutcome:
     """Execute the traced multi-step intake SuperFlow (§4, §8)."""
-    trace_id = f"tr_{uuid.uuid4().hex[:16]}"
+    trace_id = f"local_{uuid.uuid4().hex[:16]}"
 
     # Step 1: RECEIVE — durably store InboundMessage before any interpretation (§4.1)
     t0 = time.perf_counter()
@@ -195,7 +256,7 @@ def _run_intake(
         shg_id=shg_id,
         trace_id=trace_id,
         step_name="receive",
-        agent_name="LyzrIntakeManager",
+        agent_name="DeterministicReceiver",
         input_summary={"channel": inbound.channel},
         output_summary={"inbound_message_id": msg.id},
         confidence=1.0,
@@ -226,7 +287,7 @@ def _run_intake(
             shg_id=shg_id,
             trace_id=trace_id,
             step_name="identify",
-            agent_name="LyzrIdentityAgent",
+            agent_name="DeterministicIdentityResolver",
             input_summary={"has_phone_hash": bool(phone_hash)},
             output_summary={"quarantined": True},
             confidence=0.0,
@@ -263,7 +324,7 @@ def _run_intake(
         shg_id=shg_id,
         trace_id=trace_id,
         step_name="identify",
-        agent_name="LyzrIdentityAgent",
+        agent_name="DeterministicIdentityResolver",
         input_summary={"channel": inbound.channel},
         output_summary={"member_id": msg.sender_member_id, "party_id": msg.sender_party_id, "lang": lang},
         confidence=1.0,
@@ -272,9 +333,31 @@ def _run_intake(
 
     # Step 3: NORMALIZE & PHOTO DISAMBIGUATION (§4.3, §20)
     t2 = time.perf_counter()
-    norm_text = (inbound.raw_text or "").strip()
-    msg.normalized_text = norm_text
-    msg.transcript_confidence = 1.0 if norm_text else 0.0
+    normalize_agent_name = "DeterministicTextNormalizer"
+
+    if inbound.audio_bytes:
+        # Voice note -> real Bhashini/Sarvam ASR (§4.3, §13)
+        speech_result = transcribe_audio_sync(inbound.audio_bytes, source_language=lang)
+        norm_text = speech_result.transcript.strip()
+        msg.normalized_text = norm_text
+        msg.transcript_confidence = speech_result.confidence
+        msg.detected_language = speech_result.language
+        normalize_agent_name = f"BhashiniASR_{speech_result.provider}"
+        # Meter ASR usage
+        provider_key = speech_result.provider if speech_result.provider != "none" else "bhashini"
+        record_usage(
+            db,
+            shg_id=shg_id,
+            resource_type="ASR_MINUTES",
+            provider=provider_key,
+            quantity=0.5,  # approximate voice note duration
+            unit="minutes",
+            trace_id=trace_id,
+        )
+    else:
+        norm_text = (inbound.raw_text or "").strip()
+        msg.normalized_text = norm_text
+        msg.transcript_confidence = 1.0 if norm_text else 0.0
 
     has_image = bool(inbound.image_bytes) or bool(inbound.raw_payload.get("has_image"))
     photo_kind = inbound.raw_payload.get("photo_kind")
@@ -291,9 +374,9 @@ def _run_intake(
         shg_id=shg_id,
         trace_id=trace_id,
         step_name="normalize",
-        agent_name="LyzrNormalizeAgent",
-        input_summary={"raw_len": len(inbound.raw_text or "")},
-        output_summary={"normalized_len": len(norm_text)},
+        agent_name=normalize_agent_name,
+        input_summary={"raw_len": len(inbound.raw_text or ""), "has_audio": bool(inbound.audio_bytes)},
+        output_summary={"normalized_len": len(norm_text), "provider": normalize_agent_name},
         confidence=msg.transcript_confidence,
         started_at=t2,
     )
@@ -333,13 +416,50 @@ def _run_intake(
             intent = "NEW_ORDER"
             intent_conf = 0.88
         else:
-            intent = "UNROUTED"
-            intent_conf = 0.35
-            routing_method = "llm"
+            # Deterministic checks failed: try real LLM fallback if Lyzr configured (§4.4)
+            settings = get_settings()
+            if settings.lyzr_api_key and settings.lyzr_router_agent_id:
+                try:
+                    route_result = call_lyzr_agent(
+                        agent_id=settings.lyzr_router_agent_id,
+                        user_id=shg_id,
+                        session_id=trace_id,
+                        message=(
+                            f"Classify the following message into one of: NEW_ORDER, BLOCKER_REPORT, "
+                            f"FINISHED_WORK, or UNROUTED. Return JSON matching RouteIntentSchema "
+                            f"(keys: intent, confidence, reason). Message: {norm_text}"
+                        ),
+                    )
+                    parsed_route = RouteIntentSchema.model_validate_json(route_result.raw_response)
+                    intent = parsed_route.intent
+                    intent_conf = parsed_route.confidence
+                    routing_method = "lyzr_adk"
+                    # Propagate real Lyzr trace
+                    if route_result.trace_id:
+                        trace_id = route_result.trace_id
+                    record_usage(
+                        db,
+                        shg_id=shg_id,
+                        resource_type="LLM_TOKENS",
+                        provider="lyzr",
+                        quantity=route_result.total_tokens,
+                        unit="tokens",
+                        trace_id=trace_id,
+                    )
+                except Exception:
+                    # LLM call failed: fall through to honest UNROUTED
+                    intent = "UNROUTED"
+                    intent_conf = 0.35
+                    routing_method = "deterministic_fallback"
+            else:
+                intent = "UNROUTED"
+                intent_conf = 0.35
+                routing_method = "deterministic_fallback"
 
     msg.intent = intent
     msg.intent_confidence = intent_conf
     msg.routing_method = routing_method
+    route_agent_name = "LyzrRouterAgent" if routing_method == "lyzr_adk" else "DeterministicKeywordRouter"
     db.flush()
 
     _log_step(
@@ -347,7 +467,7 @@ def _run_intake(
         shg_id=shg_id,
         trace_id=trace_id,
         step_name="route",
-        agent_name="LyzrRouterAgent",
+        agent_name=route_agent_name,
         input_summary={"text_preview": norm_text[:80]},
         output_summary={"intent": intent, "method": routing_method},
         confidence=intent_conf,
@@ -393,24 +513,31 @@ def _run_intake(
 
     # Step 5: EXTRACT (NEW_ORDER) (§4.5)
     t4 = time.perf_counter()
-    extracted = _extract_order_fields_structured(db, norm_text)
+    extracted = _extract_order_fields_structured(db, norm_text, shg_id=shg_id, session_id=trace_id)
     fields = extracted["fields"]
-    record_usage(
-        db,
-        shg_id=shg_id,
-        resource_type="LLM_TOKENS",
-        provider="lyzr",
-        quantity=350,
-        unit="tokens",
-        trace_id=trace_id,
-    )
+    extract_engine = extracted.get("engine", "local_deterministic_fallback")
+    extract_tokens = extracted.get("tokens", 0)
+    # Propagate real Lyzr trace ID when available
+    if extracted.get("trace_id"):
+        trace_id = extracted["trace_id"]
+    if extract_tokens > 0:
+        record_usage(
+            db,
+            shg_id=shg_id,
+            resource_type="LLM_TOKENS",
+            provider="lyzr",
+            quantity=extract_tokens,
+            unit="tokens",
+            trace_id=trace_id,
+        )
+    extract_agent_name = "LyzrOrderExtractorAgent" if extract_engine == "lyzr_adk" else "DeterministicRegexExtractor"
     _log_step(
         db,
         shg_id=shg_id,
         trace_id=trace_id,
         step_name="extract",
-        agent_name="LyzrOrderExtractorAgent",
-        input_summary={"text_len": len(norm_text)},
+        agent_name=extract_agent_name,
+        input_summary={"text_len": len(norm_text), "engine": extract_engine},
         output_summary={k: {"val": v["value"], "conf": v["confidence"]} for k, v in fields.items()},
         confidence=min(v["confidence"] for v in fields.values()),
         started_at=t4,

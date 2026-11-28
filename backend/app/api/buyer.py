@@ -5,11 +5,14 @@ Structurally incapable of exposing individual member identities, assignments, or
 """
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.api.deps import ActorContext, require_buyer_actor
 from app.database import get_db
+from app.models.intake import Order
+from app.services.state_machine import StateTransitionError, get_transition_spec
 
 router = APIRouter(prefix="/api/buyer", tags=["buyer"])
 
@@ -81,3 +84,34 @@ def get_buyer_order_detail(
     if not row:
         raise HTTPException(status_code=404, detail="Order not found for this buyer")
     return dict(row)
+
+
+class BuyerRevisedOfferBody(BaseModel):
+    offered_price_per_unit_inr: float
+
+
+@router.post("/orders/{order_id}/revised-offer")
+def submit_buyer_revised_offer(
+    order_id: str,
+    body: BuyerRevisedOfferBody,
+    actor: ActorContext = Depends(require_buyer_actor),
+    db: Session = Depends(get_db),
+):
+    order = db.get(Order, order_id)
+    if not order or order.buyer_party_id != actor.party_id:
+        raise HTTPException(status_code=404, detail="Order not found for this buyer")
+    if body.offered_price_per_unit_inr <= 0:
+        raise HTTPException(status_code=400, detail="offered_price_per_unit_inr must be positive")
+    try:
+        get_transition_spec("order", order.status, "CONFIRMED")
+    except StateTransitionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    order.offered_price_per_unit_inr = body.offered_price_per_unit_inr
+    order.status = "CONFIRMED"
+    db.commit()
+    return {
+        "order_id": order.id,
+        "status": order.status,
+        "offered_price_per_unit_inr": order.offered_price_per_unit_inr,
+    }

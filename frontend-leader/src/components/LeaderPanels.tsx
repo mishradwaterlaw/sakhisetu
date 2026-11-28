@@ -293,10 +293,16 @@ export function SideBySideQCQueue({
 
 export function SupplierAndCounterOfferPanel({
   orderId,
+  leaderId,
+  orderStatus,
   materials,
+  onCounterOfferSent,
 }: {
   orderId: string;
+  leaderId?: string;
+  orderStatus?: string;
   materials: { id: string; name: string; unit: string }[];
+  onCounterOfferSent?: () => void;
 }) {
   const [quotes, setQuotes] = useState<
     { supplier_quote_id: string; supplier_name: string; unit_price_inr: number; total_cost_inr: number; delivery_days: number }[]
@@ -304,6 +310,7 @@ export function SupplierAndCounterOfferPanel({
   const [hasCompared, setHasCompared] = useState(false);
   const [loadingQuotes, setLoadingQuotes] = useState(false);
   const [draftMsg, setDraftMsg] = useState("");
+  const [sendingOffer, setSendingOffer] = useState(false);
   const [sentNotice, setSentNotice] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -398,10 +405,36 @@ export function SupplierAndCounterOfferPanel({
             onChange={(e) => { setDraftMsg(e.target.value); setSentNotice(null); }}
             className="w-full rounded border border-[var(--border-neutral)] p-2 type-scale-sm"
           />
-          <Button variant="primary" disabled={!draftMsg.trim()} onClick={async () => {
-            try { await navigator.clipboard.writeText(draftMsg); setSentNotice("Counter-offer copied."); }
-            catch { setErr("Select the draft text and use your device’s copy command."); }
-          }}><Copy size={15}/>Copy counter-offer</Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="primary" disabled={!draftMsg.trim()} onClick={async () => {
+              try { await navigator.clipboard.writeText(draftMsg); setSentNotice("Counter-offer copied."); }
+              catch { setErr("Select the draft text and use your device’s copy command."); }
+            }}><Copy size={15}/>Copy counter-offer</Button>
+            {leaderId && orderStatus === "CONFIRMED" && (
+              <Button
+                variant="approvalGate"
+                disabled={sendingOffer || !draftMsg.trim()}
+                onClick={async () => {
+                  setSendingOffer(true);
+                  setErr(null);
+                  try {
+                    await apiFetch(`/api/leader/orders/${orderId}/send-counter-offer`, {
+                      method: "POST",
+                      body: JSON.stringify({ leader_id: leaderId, message: draftMsg }),
+                    });
+                    setSentNotice("Counter-offer sent. Waiting for buyer revised offer.");
+                    onCounterOfferSent?.();
+                  } catch (e: unknown) {
+                    setErr(e instanceof Error ? e.message : "Failed to send counter-offer");
+                  } finally {
+                    setSendingOffer(false);
+                  }
+                }}
+              >
+                {sendingOffer ? "Sending..." : "Send counter-offer to buyer"}
+              </Button>
+            )}
+          </div>
           {sentNotice && <div className="type-scale-xs text-[var(--status-success)]">{sentNotice}</div>}
         </div>
       )}

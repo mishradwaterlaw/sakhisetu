@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.models.intake import Order
 from app.models.planning import TaskAssignment
-from app.models.quality import Contest, QCCheck, QualityRubric
+from app.models.quality import Contest, QCCheck, QualityRubric, ReviewRotation
 from app.services.rotation import create_review_rotation
 
 
@@ -77,16 +77,32 @@ def record_human_qc_decision(
     if not order:
         raise ValueError("Order not found")
 
-    # Ensure shared rotation exists for QUALITY on this order
-    rotation = create_review_rotation(
-        db,
-        shg_id=order.shg_id,
-        purpose="QUALITY",
-        target_entity_type="order",
-        target_entity_id=order_id,
-        committee_size=2,
-        exclude_member_ids={assignment.member_id},
+    # Reuse existing QUALITY rotation for this order, or create one if none exists yet
+    rotation = db.scalar(
+        select(ReviewRotation)
+        .where(
+            ReviewRotation.shg_id == order.shg_id,
+            ReviewRotation.purpose == "QUALITY",
+            ReviewRotation.target_entity_type == "order",
+            ReviewRotation.target_entity_id == order_id,
+        )
+        .order_by(ReviewRotation.created_at.desc())
     )
+    if not rotation:
+        rotation = create_review_rotation(
+            db,
+            shg_id=order.shg_id,
+            purpose="QUALITY",
+            target_entity_type="order",
+            target_entity_id=order_id,
+            committee_size=2,
+            exclude_member_ids={assignment.member_id},
+        )
+    selected_ids = list(rotation.selected_member_ids or [])
+    if reviewer_member_id not in selected_ids:
+        raise PermissionError(
+            f"Reviewer {reviewer_member_id} is not on the rotating quality committee {selected_ids}"
+        )
 
     # Check repeat-defect pattern for private coaching note (never punitive or public)
     coaching_note: str | None = None

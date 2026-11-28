@@ -111,6 +111,23 @@ def test_bank_creditworthiness_and_group_consent_gate(client, db_session):
     db_session.commit()
     assert client.post(f"/api/leader/shgs/{shg.id}/bank-summary/share?consent_event_id={unilateral.id}").status_code == 403
 
+    # Partial member consent (only members[1], missing members[2]) must fail with 403
+    from app.models.governance import ConsentEvent
+
+    partial = grant_consent(
+        db_session,
+        shg_id=shg.id,
+        granted_by_member_id=members[1].id,
+        recipient_type="BANK",
+        recipient_id="SBI",
+        purpose="Credit check",
+        scope={"group_committee_approved": True},
+        member_ids=[members[1].id],
+    )
+    db_session.commit()
+    assert client.post(f"/api/leader/shgs/{shg.id}/bank-summary/share?consent_event_id={partial.id}").status_code == 403
+
+    # Full per-member consent writes one ConsentEvent row per contributing member
     group_ok = grant_consent(
         db_session,
         shg_id=shg.id,
@@ -121,8 +138,17 @@ def test_bank_creditworthiness_and_group_consent_gate(client, db_session):
         scope={"group_committee_approved": True},
     )
     db_session.commit()
+    bank_consents = (
+        db_session.query(ConsentEvent)
+        .filter_by(shg_id=shg.id, recipient_type="BANK", consented=True)
+        .all()
+    )
+    consented_ids = {c.granted_by_member_id for c in bank_consents if c.scope.get("group_committee_approved")}
+    assert {members[1].id, members[2].id}.issubset(consented_ids)
+
     ok = client.post(f"/api/leader/shgs/{shg.id}/bank-summary/share?consent_event_id={group_ok.id}")
     assert ok.status_code == 200
+    assert ok.json()["consented_member_count"] == 2
     assert ok.json()["consent_event_id"] == group_ok.id
 
 

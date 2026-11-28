@@ -69,11 +69,32 @@ def test_payout_group_notice_broadcast_and_consent_gate(db_session):
     notices = db_session.query(CommsLog).filter_by(message_category="GROUP_PAYOUT_NOTICE").all()
     assert len(notices) == len(members)  # Every member notified, not just committee
 
+    from app.models.governance import Approval
     from app.models.quality import ReviewRotation
 
     rot = db_session.get(ReviewRotation, batch.rotation_id)
-    reviewer_id = rot.selected_member_ids[0]
-    approve_payout_by_committee(db_session, batch_id=batch.id, reviewer_member_id=reviewer_id)
+    assert len(rot.selected_member_ids) == 2
+
+    # First committee member approves -> quorum (2/2) not yet met; must stay PAYOUT_PENDING
+    res1 = approve_payout_by_committee(db_session, batch_id=batch.id, reviewer_member_id=rot.selected_member_ids[0])
+    assert batch.status == "PAYOUT_PENDING"
+    assert batch.group_approval_broadcast_sent is False
+    assert res1["required_quorum"] == 2
+    assert res1["approved_member_ids"] == [rot.selected_member_ids[0]]
+    assert res1["pending_member_ids"] == [rot.selected_member_ids[1]]
+
+    # Second committee member approves -> quorum met -> PAYOUT_APPROVED + broadcast
+    res2 = approve_payout_by_committee(db_session, batch_id=batch.id, reviewer_member_id=rot.selected_member_ids[1])
+    assert batch.status == "PAYOUT_APPROVED"
+    assert res2["pending_member_ids"] == []
+
+    # Verify one Approval row per individual committee member
+    approvals = (
+        db_session.query(Approval)
+        .filter_by(entity_type="payout_batch", entity_id=batch.id, decision="APPROVED")
+        .all()
+    )
+    assert {a.actor_id for a in approvals} == set(rot.selected_member_ids)
 
     assert batch.group_approval_broadcast_sent is True
     broadcasts = db_session.query(CommsLog).filter_by(message_category="GROUP_APPROVAL_BROADCAST").all()

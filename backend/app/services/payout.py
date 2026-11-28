@@ -134,37 +134,113 @@ def approve_payout_by_committee(
     *,
     batch_id: str,
     reviewer_member_id: str,
+    decision: str = "APPROVED",  # APPROVED | REJECTED
     contest_window_hours: int = 24,
     reason: str | None = None,
-) -> PayoutBatch:
-    """Explicit committee approval: PAYOUT_PENDING -> PAYOUT_APPROVED.
-    Broadcasts group-level confirmation to ALL members BEFORE individual earnings read-backs (§7).
+) -> dict:
+    """Record an individual committee member's response (one Approval row per responder).
+
+    Quorum rule (explicitly hard-coded):
+    - Requires strict majority of the selected committee: `(len(selected) // 2) + 1`
+      (e.g., 2 of 2 for a 2-member committee, 2 of 3 for a 3-member committee).
+    - If any committee member responds REJECTED, writes her individual Approval(REJECTED)
+      row and halts the batch into DISPUTED immediately.
+    - Only transitions PAYOUT_PENDING -> PAYOUT_APPROVED and broadcasts group approval +
+      earnings read-backs once distinct APPROVED rows >= required_quorum.
     """
+    from app.models.governance import Approval
+    from app.models.quality import ReviewRotation
+
+    if decision not in ("APPROVED", "REJECTED"):
+        raise ValueError("decision must be APPROVED or REJECTED")
+
     batch = db.get(PayoutBatch, batch_id)
     if not batch:
         raise ValueError("Payout batch not found")
-
-    from app.models.quality import ReviewRotation
+    if batch.status != "PAYOUT_PENDING":
+        raise ValueError(f"Payout batch is in status {batch.status}, expected PAYOUT_PENDING")
 
     rotation = db.get(ReviewRotation, batch.rotation_id) if batch.rotation_id else None
-    if not rotation or reviewer_member_id not in (rotation.selected_member_ids or []):
-        raise PermissionError("Only a selected rotating committee member can approve this payout")
+    selected_ids = list(rotation.selected_member_ids or []) if rotation else []
+    if not rotation or reviewer_member_id not in selected_ids:
+        raise PermissionError("Only a selected rotating committee member can review this payout")
 
-    now = datetime.now(timezone.utc)
-    record_approval_and_transition(
-        db,
+    existing_vote = db.scalar(
+        select(Approval).where(
+            Approval.entity_type == "payout_batch",
+            Approval.entity_id == batch.id,
+            Approval.transition_name == "PAYOUT_PENDING->PAYOUT_APPROVED",
+            Approval.actor_type == "REVIEW_COMMITTEE",
+            Approval.actor_id == reviewer_member_id,
+        )
+    )
+    if existing_vote:
+        raise ValueError(f"Committee member {reviewer_member_id} has already recorded a response")
+
+    required_quorum = (len(selected_ids) // 2) + 1
+
+    if decision == "REJECTED":
+        db.add(
+            Approval(
+                shg_id=batch.shg_id,
+                entity_type="payout_batch",
+                entity_id=batch.id,
+                transition_name="PAYOUT_PENDING->PAYOUT_APPROVED",
+                actor_type="REVIEW_COMMITTEE",
+                actor_id=reviewer_member_id,
+                decision="REJECTED",
+                reason=reason or "Flagged by rotating committee member",
+                evidence={"rotation_id": rotation.id, "seed": rotation.selection_seed},
+            )
+        )
+        batch.status = "DISPUTED"
+        db.flush()
+        return {
+            "batch": batch,
+            "required_quorum": required_quorum,
+            "approved_member_ids": [],
+            "pending_member_ids": [m for m in selected_ids if m != reviewer_member_id],
+        }
+
+    # Record individual committee member approval row
+    individual_approval = Approval(
         shg_id=batch.shg_id,
-        entity_obj=batch,
         entity_type="payout_batch",
         entity_id=batch.id,
-        current_state=batch.status,
-        target_state="PAYOUT_APPROVED",
+        transition_name="PAYOUT_PENDING->PAYOUT_APPROVED",
         actor_type="REVIEW_COMMITTEE",
         actor_id=reviewer_member_id,
-        reason=reason or "Approved by rotating member review committee",
+        decision="APPROVED",
+        reason=reason or "Approved by rotating committee member",
         evidence={"rotation_id": rotation.id, "seed": rotation.selection_seed},
     )
+    db.add(individual_approval)
+    db.flush()
 
+    approved_rows = db.scalars(
+        select(Approval).where(
+            Approval.entity_type == "payout_batch",
+            Approval.entity_id == batch.id,
+            Approval.transition_name == "PAYOUT_PENDING->PAYOUT_APPROVED",
+            Approval.actor_type == "REVIEW_COMMITTEE",
+            Approval.decision == "APPROVED",
+        )
+    ).all()
+    approved_member_ids = [r.actor_id for r in approved_rows]
+    pending_member_ids = [m for m in selected_ids if m not in approved_member_ids]
+
+    if len(approved_member_ids) < required_quorum:
+        # Quorum not yet met: remain in PAYOUT_PENDING with pending members visibly distinct
+        db.flush()
+        return {
+            "batch": batch,
+            "required_quorum": required_quorum,
+            "approved_member_ids": approved_member_ids,
+            "pending_member_ids": pending_member_ids,
+        }
+
+    now = datetime.now(timezone.utc)
+    batch.status = "PAYOUT_APPROVED"
     batch.approved_at = now
     batch.contest_window_ends_at = now + timedelta(hours=contest_window_hours)
 
@@ -183,7 +259,7 @@ def approve_payout_by_committee(
                 channel=m.default_channel,
                 language=m.preferred_language,
                 message_category="GROUP_APPROVAL_BROADCAST",
-                fact_text=f"GROUP DECISION: Payout of ₹{batch.total_amount_inr:.2f} for {order_code} was approved by the rotating committee.",
+                fact_text=f"GROUP DECISION: Payout of ₹{batch.total_amount_inr:.2f} for {order_code} was approved by the rotating committee ({len(approved_member_ids)}/{len(selected_ids)}).",
                 action_text=f"Contest window is open for {contest_window_hours}h for any member.",
                 request_text="Reply or press 9 to raise an objection if your count looks wrong.",
                 is_replayable=True,
@@ -211,7 +287,12 @@ def approve_payout_by_committee(
         )
 
     db.flush()
-    return batch
+    return {
+        "batch": batch,
+        "required_quorum": required_quorum,
+        "approved_member_ids": approved_member_ids,
+        "pending_member_ids": pending_member_ids,
+    }
 
 
 def raise_payout_contest(

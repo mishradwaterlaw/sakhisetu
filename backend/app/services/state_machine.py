@@ -46,6 +46,18 @@ TRANSITIONS: dict[tuple[str, str, str], TransitionSpec] = {
     ("order", "DRAFT", "CONFIRMED"): TransitionSpec(
         "order", "DRAFT", "CONFIRMED", TransitionKind.EXPLICIT_APPROVAL_REQUIRED, ("LEADER",)
     ),
+    ("order", "CONFIRMED", "COUNTER_OFFER_SENT"): TransitionSpec(
+        "order", "CONFIRMED", "COUNTER_OFFER_SENT", TransitionKind.EXPLICIT_APPROVAL_REQUIRED, ("LEADER",)
+    ),
+    ("order", "COUNTER_OFFER_SENT", "NEGOTIATING"): TransitionSpec(
+        "order", "COUNTER_OFFER_SENT", "NEGOTIATING", TransitionKind.NON_GATED_WORKFLOW
+    ),
+    ("order", "COUNTER_OFFER_SENT", "CONFIRMED"): TransitionSpec(
+        "order", "COUNTER_OFFER_SENT", "CONFIRMED", TransitionKind.NON_GATED_WORKFLOW
+    ),
+    ("order", "NEGOTIATING", "CONFIRMED"): TransitionSpec(
+        "order", "NEGOTIATING", "CONFIRMED", TransitionKind.NON_GATED_WORKFLOW
+    ),
     ("order", "CONFIRMED", "PRICING_APPROVED"): TransitionSpec(
         "order", "CONFIRMED", "PRICING_APPROVED", TransitionKind.EXPLICIT_APPROVAL_REQUIRED, ("LEADER",)
     ),

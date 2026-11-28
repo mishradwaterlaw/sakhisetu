@@ -54,6 +54,7 @@ export interface OrderDetail {
   }[];
   assignments: {
     id: string;
+    member_id?: string;
     member_name: string;
     assigned_units: number;
     passed_units: number;
@@ -72,7 +73,7 @@ export const filters: OrderFilter[] = ["All orders", "Draft", "Planning", "Produ
 
 export function stage(status: string): OrderFilter | "Other" {
   if (status === "DRAFT") return "Draft";
-  if (["CONFIRMED", "PRICING_APPROVED", "ALLOCATION_PROPOSED"].includes(status)) return "Planning";
+  if (["CONFIRMED", "COUNTER_OFFER_SENT", "NEGOTIATING", "PRICING_APPROVED", "ALLOCATION_PROPOSED"].includes(status)) return "Planning";
   if (["ALLOCATION_APPROVED", "IN_PRODUCTION"].includes(status)) return "Production";
   if (["QC_PENDING", "QC_CLEARED"].includes(status)) return "Quality";
   return "Other";
