@@ -296,12 +296,18 @@ export function SupplierAndCounterOfferPanel({
   leaderId,
   orderStatus,
   materials,
+  recommendation,
+  buyerOffer,
+  mvpPrice,
   onCounterOfferSent,
 }: {
   orderId: string;
   leaderId?: string;
   orderStatus?: string;
   materials: { id: string; name: string; unit: string }[];
+  recommendation?: string;
+  buyerOffer?: number | null;
+  mvpPrice?: number | null;
   onCounterOfferSent?: () => void;
 }) {
   const [quotes, setQuotes] = useState<
@@ -310,9 +316,13 @@ export function SupplierAndCounterOfferPanel({
   const [hasCompared, setHasCompared] = useState(false);
   const [loadingQuotes, setLoadingQuotes] = useState(false);
   const [draftMsg, setDraftMsg] = useState("");
+  const [rationale, setRationale] = useState<string | null>(null);
   const [sendingOffer, setSendingOffer] = useState(false);
   const [sentNotice, setSentNotice] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+
+  const isOfferGood = recommendation === "ACCEPT";
+  const isInsufficient = recommendation === "INSUFFICIENT_DATA";
 
   async function loadQuotes() {
     if (!materials[0]) return;
@@ -331,14 +341,19 @@ export function SupplierAndCounterOfferPanel({
     }
   }
 
-  async function loadCounterOffer() {
+  async function loadCounterOffer(forceDraft = false) {
     setSentNotice(null);
     setErr(null);
     try {
-      const res = await apiFetch<{ draft_message: string }>(`/api/leader/orders/${orderId}/counter-offer-draft`, {
+      const res = await apiFetch<{
+        draft_message: string | null;
+        rationale?: string;
+        needs_counter_offer?: boolean;
+      }>(`/api/leader/orders/${orderId}/counter-offer-draft${forceDraft ? "?force_draft=true" : ""}`, {
         method: "POST",
       });
-      setDraftMsg(res.draft_message);
+      setRationale(res.rationale || null);
+      setDraftMsg(res.draft_message || "");
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Failed to draft counter-offer");
     }
@@ -353,11 +368,38 @@ export function SupplierAndCounterOfferPanel({
         </CardTitle>
         <div className="flex gap-1.5">
           <Button disabled={loadingQuotes || !materials.length} onClick={loadQuotes}>Compare Suppliers</Button>
-          <Button variant="primary" onClick={loadCounterOffer}>
-            Draft Counter-Offer
-          </Button>
+          {!isOfferGood && !isInsufficient && (
+            <Button variant="primary" onClick={() => loadCounterOffer(false)}>
+              Draft Counter-Offer
+            </Button>
+          )}
         </div>
       </CardHeader>
+
+      {isOfferGood && !draftMsg && (
+        <div className="rounded border border-[var(--status-success)] bg-[var(--status-success-bg)] px-3 py-2 type-scale-xs flex flex-wrap items-center justify-between gap-2">
+          <span className="font-bold text-[var(--status-success)]">
+            Buyer offer ({buyerOffer != null ? `₹${buyerOffer.toFixed(2)}` : "offered"}/unit) meets or exceeds minimum viable price ({mvpPrice != null ? `₹${mvpPrice.toFixed(2)}` : "MVP"}/unit). Ready to approve price.
+          </span>
+          <button
+            type="button"
+            onClick={() => loadCounterOffer(true)}
+            className="text-[var(--text-secondary)] underline"
+          >
+            Draft custom quote anyway
+          </button>
+        </div>
+      )}
+
+      {isInsufficient && (
+        <div className="rounded border border-[var(--status-warning)] bg-[var(--status-warning-bg)] px-3 py-2 type-scale-xs text-[var(--status-warning)]">
+          Can't compute a reliable cost basis for this product yet; add catalogue pricing before drafting a counter-offer.
+        </div>
+      )}
+
+      {rationale && !draftMsg && !isOfferGood && (
+        <div className="type-scale-xs text-[var(--text-secondary)]">{rationale}</div>
+      )}
 
       {err && (
         <div className="rounded border border-[var(--status-danger)] bg-[var(--status-danger-bg)] px-3 py-2 type-scale-xs text-[var(--status-danger)]">

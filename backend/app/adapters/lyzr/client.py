@@ -27,6 +27,13 @@ class ExtractedOrderSchema(BaseModel):
     due_date: ExtractedFieldValue
 
 
+class PricingAnalysisSchema(BaseModel):
+    verdict: Literal["ACCEPT", "COUNTER_OFFER", "DECLINE", "INSUFFICIENT_DATA"]
+    recommended_price_inr: float
+    rationale: str
+    draft_message: str | None = None
+
+
 class LyzrCallResult(BaseModel):
     trace_id: str
     raw_response: str

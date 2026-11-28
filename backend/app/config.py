@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     lyzr_agent_api_url: str = "https://agent-prod.studio.lyzr.ai/v3/inference/chat/"
     lyzr_router_agent_id: str = ""
     lyzr_extractor_agent_id: str = ""
+    lyzr_pricing_agent_id: str = ""
     lyzr_environment: str = "local"
     lyzr_model: str = "gpt-4o-mini"
 

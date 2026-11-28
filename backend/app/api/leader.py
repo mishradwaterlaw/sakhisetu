@@ -377,6 +377,11 @@ def get_order_review_detail(order_id: str, db: Session = Depends(get_db)):
     assignments = db.scalars(select(TaskAssignment).where(TaskAssignment.order_id == order_id)).all()
     rubric = db.scalar(select(QualityRubric).where(QualityRubric.order_id == order_id))
     qc_checks = db.scalars(select(QCCheck).where(QCCheck.order_id == order_id)).all()
+    from app.models.pricing import QuoteCheck
+
+    latest_quote = db.scalar(
+        select(QuoteCheck).where(QuoteCheck.order_id == order_id).order_by(QuoteCheck.created_at.desc())
+    )
 
     return {
         "order": {
@@ -453,6 +458,23 @@ def get_order_review_detail(order_id: str, db: Session = Depends(get_db)):
             }
             for q in qc_checks
         ],
+        "latest_quote_check": (
+            {
+                "material_cost_per_unit_inr": latest_quote.material_cost_inr,
+                "labour_cost_per_unit_inr": latest_quote.labour_cost_inr,
+                "overhead_per_unit_inr": latest_quote.overhead_inr,
+                "margin_per_unit_inr": latest_quote.margin_inr,
+                "minimum_viable_price_per_unit_inr": latest_quote.minimum_viable_price_per_unit_inr,
+                "buyer_offer_per_unit_inr": latest_quote.buyer_offer_per_unit_inr,
+                "gap_pct": latest_quote.gap_pct,
+                "recommendation": latest_quote.recommendation,
+                "market_trend_note": (latest_quote.breakdown_details or {}).get("market_trend_note")
+                or (latest_quote.breakdown_details or {}).get("reason")
+                or "",
+            }
+            if latest_quote
+            else None
+        ),
     }
 
 
@@ -489,8 +511,8 @@ def confirm_order(order_id: str, body: ConfirmOrderIn, db: Session = Depends(get
 @router.post("/orders/{order_id}/pricing")
 def evaluate_pricing(order_id: str, db: Session = Depends(get_db)):
     order = db.get(Order, order_id)
-    if not order or not order.product_id:
-        raise HTTPException(status_code=404, detail="Order or product not found")
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
 
     breakdown = compute_order_pricing(
         db,
@@ -1004,15 +1026,16 @@ def create_manual_leader_order(body: ManualOrderIn, db: Session = Depends(get_db
 
 
 @router.post("/orders/{order_id}/counter-offer-draft")
-def get_buyer_counter_offer_draft(order_id: str, db: Session = Depends(get_db)):
-    """§15: Draft (never auto-send) buyer counter-offer grounded in real MVP cost breakdown."""
+def get_buyer_counter_offer_draft(order_id: str, force_draft: bool = False, db: Session = Depends(get_db)):
+    """§15: Margin-aware analysis & counter-offer draft (never auto-send)."""
     from app.models.catalogue import Product
-    from app.services.pricing import draft_buyer_counter_offer
+    from app.services.pricing import analyze_and_draft_pricing
+    from app.services.usage import record_usage
 
     order = db.get(Order, order_id)
-    if not order or not order.product_id:
-        raise HTTPException(status_code=404, detail="Order or product not found")
-    product = db.get(Product, order.product_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    product = db.get(Product, order.product_id) if order.product_id else None
     shg = db.get(SHG, order.shg_id)
     breakdown = compute_order_pricing(
         db,
@@ -1022,13 +1045,28 @@ def get_buyer_counter_offer_draft(order_id: str, db: Session = Depends(get_db)):
         buyer_offer_per_unit_inr=order.offered_price_per_unit_inr,
         persist=False,
     )
-    return draft_buyer_counter_offer(
+    result = analyze_and_draft_pricing(
         breakdown,
+        shg_id=order.shg_id,
         order_code=order.order_code,
         product_name=product.name if product else "Product",
         quantity=order.quantity,
         leader_language=shg.primary_language if shg else "en",
+        session_id=f"pricing_{order.id}",
+        force_draft=force_draft,
     )
+    if result.get("tokens", 0) > 0:
+        record_usage(
+            db,
+            shg_id=order.shg_id,
+            resource_type="LLM_TOKENS",
+            provider="lyzr",
+            quantity=result["tokens"],
+            unit="tokens",
+            trace_id=result.get("trace_id"),
+        )
+        db.commit()
+    return result
 
 
 class SendCounterOfferIn(BaseModel):

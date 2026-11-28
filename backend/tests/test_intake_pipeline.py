@@ -58,7 +58,7 @@ def test_exotel_unrouted_returns_dtmf_exoml_and_whatsapp_draft_traces_steps(clie
 
     events = db_session.query(AgentEvent).filter_by(trace_id=wa_data["trace_id"]).all()
     step_names = [e.step_name for e in events]
-    assert step_names == ["receive", "identify", "normalize", "route", "extract", "validate"]
+    assert step_names == ["receive", "identify", "normalize", "route", "extract", "validate", "pricing_analysis"]
 
     meters = db_session.query(UsageMeter).filter_by(trace_id=wa_data["trace_id"]).all()
     # Offline/local deterministic fallback meters only WHATSAPP_MSG (0 fake LLM_TOKENS)

@@ -39,7 +39,7 @@ def test_supplier_comparison_and_counter_offer_draft(client, db_session):
             "buyer_party_id": buyer.id,
             "product_name": "Cotton Tote Bag",
             "quantity": 20,
-            "offered_price_per_unit_inr": 90.0,
+            "offered_price_per_unit_inr": 70.0,
         },
     ).json()
     assert man["status"] == "DRAFT_CREATED"

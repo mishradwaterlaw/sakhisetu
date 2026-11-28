@@ -83,6 +83,17 @@ export interface OrderDetail {
     status: string;
   }[];
   rubric: { status: string; criteria: { criterion: string; target: string }[] } | null;
+  latest_quote_check?: {
+    material_cost_per_unit_inr: number;
+    labour_cost_per_unit_inr: number;
+    overhead_per_unit_inr: number;
+    margin_per_unit_inr: number;
+    minimum_viable_price_per_unit_inr: number;
+    buyer_offer_per_unit_inr: number | null;
+    gap_pct: number | null;
+    recommendation: string;
+    market_trend_note: string;
+  } | null;
 }
 
 export type Order = DashboardData["orders"][number];

@@ -58,7 +58,12 @@ export function OrderReview({
     let active = true;
     apiFetch<OrderDetail>(`/api/leader/orders/${order.id}`)
       .then((result) => {
-        if (active) setDetail(result);
+        if (active) {
+          setDetail(result);
+          if (result.latest_quote_check) {
+            setPricingInfo(result.latest_quote_check);
+          }
+        }
       })
       .catch((err) => {
         if (active) setError(err.message);
@@ -384,20 +389,28 @@ export function OrderReview({
 
           {pricingInfo && (
             <div className="rounded border border-[var(--border-neutral)] bg-[var(--bg-surface-muted)] p-2.5 type-scale-xs space-y-1">
-              <div className="font-bold flex items-center gap-1">
-                <IndianRupee className="w-3.5 h-3.5" strokeWidth={1.75} />
-                <span>
-                  MVP: ₹{String(pricingInfo.minimum_viable_price_per_unit_inr)}/unit (
-                  {String(pricingInfo.recommendation)})
-                </span>
-              </div>
-              <div>
-                Material ₹{String(pricingInfo.material_cost_per_unit_inr)} • Labour ₹
-                {String(pricingInfo.labour_cost_per_unit_inr)} • Overhead ₹
-                {String(pricingInfo.overhead_per_unit_inr)} • Margin ₹
-                {String(pricingInfo.margin_per_unit_inr)}
-              </div>
-              <div className="text-[var(--status-warning)]">{String(pricingInfo.market_trend_note)}</div>
+              {pricingInfo.recommendation === "INSUFFICIENT_DATA" ? (
+                <div className="font-bold text-[var(--status-warning)]">
+                  Can't compute a reliable cost basis for this product yet ({String(pricingInfo.market_trend_note || "missing catalogue data")}).
+                </div>
+              ) : (
+                <>
+                  <div className="font-bold flex items-center gap-1">
+                    <IndianRupee className="w-3.5 h-3.5" strokeWidth={1.75} />
+                    <span>
+                      MVP: ₹{String(pricingInfo.minimum_viable_price_per_unit_inr)}/unit (
+                      {String(pricingInfo.recommendation)})
+                    </span>
+                  </div>
+                  <div>
+                    Material ₹{String(pricingInfo.material_cost_per_unit_inr)} • Labour ₹
+                    {String(pricingInfo.labour_cost_per_unit_inr)} • Overhead ₹
+                    {String(pricingInfo.overhead_per_unit_inr)} • Margin ₹
+                    {String(pricingInfo.margin_per_unit_inr)}
+                  </div>
+                  <div className="text-[var(--status-warning)]">{String(pricingInfo.market_trend_note)}</div>
+                </>
+              )}
             </div>
           )}
 
@@ -747,6 +760,13 @@ export function OrderReview({
             leaderId={leaderId}
             orderStatus={orderDetail.order.status}
             materials={materials}
+            recommendation={String(pricingInfo?.recommendation || "")}
+            buyerOffer={orderDetail.order.offered_price_per_unit_inr}
+            mvpPrice={
+              pricingInfo?.minimum_viable_price_per_unit_inr != null
+                ? Number(pricingInfo.minimum_viable_price_per_unit_inr)
+                : null
+            }
             onCounterOfferSent={() => refresh("Counter-offer sent to buyer.")}
           />
 

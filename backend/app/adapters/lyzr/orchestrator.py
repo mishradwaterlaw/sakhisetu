@@ -683,6 +683,56 @@ def _run_intake(
         )
 
     db.flush()
+
+    # Step 10: AUTO COST & MARGIN ANALYSIS (purely informational — never advances status or commits)
+    t_price = time.perf_counter()
+    from app.services.pricing import analyze_and_draft_pricing, compute_order_pricing
+
+    prod_obj = db.get(Product, product_id) if product_id else None
+    shg_obj = db.get(SHG, shg_id)
+    breakdown = compute_order_pricing(
+        db,
+        order_id=order.id,
+        product_id=product_id,
+        quantity=qty,
+        buyer_offer_per_unit_inr=price,
+        persist=True,
+    )
+    pricing_analysis = analyze_and_draft_pricing(
+        breakdown,
+        shg_id=shg_id,
+        order_code=order.order_code,
+        product_name=prod_obj.name if prod_obj else (fields["product"]["display"] or "Unmapped Product"),
+        quantity=qty,
+        leader_language=shg_obj.primary_language if shg_obj else "en",
+        session_id=trace_id,
+    )
+    if pricing_analysis.get("tokens", 0) > 0:
+        record_usage(
+            db,
+            shg_id=shg_id,
+            resource_type="LLM_TOKENS",
+            provider="lyzr",
+            quantity=pricing_analysis["tokens"],
+            unit="tokens",
+            trace_id=pricing_analysis.get("trace_id") or trace_id,
+        )
+    _log_step(
+        db,
+        shg_id=shg_id,
+        trace_id=trace_id,
+        step_name="pricing_analysis",
+        agent_name=pricing_analysis["agent_name"],
+        input_summary={"product_id": product_id, "buyer_offer": price, "qty": qty},
+        output_summary={
+            "verdict": pricing_analysis["verdict"],
+            "mvp": breakdown.minimum_viable_price_per_unit_inr,
+            "needs_counter_offer": pricing_analysis["needs_counter_offer"],
+        },
+        confidence=1.0 if pricing_analysis["verdict"] != "INSUFFICIENT_DATA" else 0.0,
+        started_at=t_price,
+    )
+
     return IntakeOutcome(
         trace_id=trace_id,
         inbound_message_id=msg.id,
